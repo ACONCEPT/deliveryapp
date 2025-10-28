@@ -1,0 +1,922 @@
+# Order Management API Documentation
+# Phase 1: Core Order System
+# To be merged into main openapi.yaml
+
+# Add to tags section:
+tags:
+  - name: Orders
+    description: Order management for customers, vendors, and admins
+
+# Add to paths section:
+
+paths:
+  # ============================================================================
+  # CUSTOMER ORDER ENDPOINTS
+  # ============================================================================
+
+  /api/customer/orders:
+    post:
+      summary: Create a new order
+      description: Customer places a new order from a restaurant
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order placed successfully
+                  data:
+                    type: object
+                    properties:
+                      order_id:
+                        type: integer
+                        example: 42
+                      total_amount:
+                        type: number
+                        format: float
+                        example: 45.50
+                      status:
+                        type: string
+                        example: pending
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    get:
+      summary: Get customer's orders
+      description: Retrieve all orders for the authenticated customer with pagination
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: Number of orders per page
+      responses:
+        '200':
+          description: Orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Orders retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      orders:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Order'
+                      page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 20
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/customer/orders/{id}:
+    get:
+      summary: Get order details
+      description: Retrieve detailed information about a specific order
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Order ID
+      responses:
+        '200':
+          description: Order details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order details retrieved successfully
+                  data:
+                    $ref: '#/components/schemas/OrderDetailsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/customer/orders/{id}/cancel:
+    put:
+      summary: Cancel an order
+      description: Customer cancels their order (only allowed for certain statuses)
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Order ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelOrderRequest'
+      responses:
+        '200':
+          description: Order cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order cancelled successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # VENDOR ORDER ENDPOINTS
+  # ============================================================================
+
+  /api/vendor/orders:
+    get:
+      summary: Get vendor's orders
+      description: Retrieve orders for all restaurants owned by the vendor
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, confirmed, preparing, ready, driver_assigned, picked_up, in_transit, delivered, cancelled]
+          description: Filter by order status
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: Orders per page
+      responses:
+        '200':
+          description: Orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Orders retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      orders:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Order'
+                      page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 20
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/vendor/orders/{id}:
+    get:
+      summary: Get vendor order details
+      description: Retrieve detailed order information for vendor's restaurant
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Order ID
+      responses:
+        '200':
+          description: Order details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order details retrieved successfully
+                  data:
+                    $ref: '#/components/schemas/OrderDetailsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/vendor/orders/{id}/status:
+    put:
+      summary: Update order status
+      description: Vendor updates the order status (confirmed, preparing, ready, etc.)
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Order ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrderStatusRequest'
+      responses:
+        '200':
+          description: Order status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order status updated successfully
+                  data:
+                    type: object
+                    properties:
+                      order_id:
+                        type: integer
+                        example: 42
+                      status:
+                        type: string
+                        example: confirmed
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # ADMIN ORDER ENDPOINTS
+  # ============================================================================
+
+  /api/admin/orders:
+    get:
+      summary: Get all orders (admin)
+      description: Retrieve all orders with filtering and pagination
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+          description: Filter by status
+        - name: restaurant_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by restaurant ID
+        - name: customer_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by customer ID
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 500
+          description: Orders per page
+      responses:
+        '200':
+          description: Orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Orders retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      orders:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Order'
+                      total_count:
+                        type: integer
+                        example: 150
+                      page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 50
+                      total_pages:
+                        type: integer
+                        example: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/orders/{id}:
+    get:
+      summary: Get order details (admin)
+      description: Admin can view any order's details
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Order ID
+      responses:
+        '200':
+          description: Order details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order details retrieved successfully
+                  data:
+                    $ref: '#/components/schemas/OrderDetailsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      summary: Update order (admin override)
+      description: Admin can update any field of an order
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Order ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                total_amount:
+                  type: number
+                  format: float
+                driver_id:
+                  type: integer
+      responses:
+        '200':
+          description: Order updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order updated successfully
+                  data:
+                    type: object
+                    properties:
+                      order_id:
+                        type: integer
+                        example: 42
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/admin/orders/stats:
+    get:
+      summary: Get order statistics
+      description: Retrieve aggregated order statistics for admin dashboard
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: restaurant_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by restaurant
+        - name: customer_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by customer
+      responses:
+        '200':
+          description: Statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order statistics retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      stats:
+                        $ref: '#/components/schemas/OrderStats'
+                      status_counts:
+                        type: object
+                        additionalProperties:
+                          type: integer
+                        example:
+                          pending: 15
+                          confirmed: 8
+                          delivered: 142
+                          cancelled: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/orders/export:
+    get:
+      summary: Export orders to CSV
+      description: Download orders as CSV file with optional filtering
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+          description: Filter by status
+        - name: restaurant_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by restaurant ID
+        - name: customer_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by customer ID
+      responses:
+        '200':
+          description: CSV file generated successfully
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: attachment; filename=orders_export_2024-01-15_14-30-00.csv
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+# ============================================================================
+# SCHEMAS
+# ============================================================================
+
+components:
+  schemas:
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 42
+        customer_id:
+          type: integer
+          example: 5
+        restaurant_id:
+          type: integer
+          example: 3
+        delivery_address_id:
+          type: integer
+          nullable: true
+          example: 7
+        driver_id:
+          type: integer
+          nullable: true
+          example: 2
+        status:
+          type: string
+          enum: [cart, pending, confirmed, preparing, ready, driver_assigned, picked_up, in_transit, delivered, cancelled, refunded]
+          example: pending
+        subtotal_amount:
+          type: number
+          format: float
+          example: 38.50
+        tax_amount:
+          type: number
+          format: float
+          example: 3.27
+        delivery_fee:
+          type: number
+          format: float
+          example: 5.00
+        discount_amount:
+          type: number
+          format: float
+          example: 0.00
+        total_amount:
+          type: number
+          format: float
+          example: 46.77
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T14:30:00Z
+        placed_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T14:30:00Z
+        confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T14:32:00Z
+        ready_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T14:55:00Z
+        delivered_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T15:20:00Z
+        cancelled_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        updated_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T14:32:00Z
+        special_instructions:
+          type: string
+          nullable: true
+          example: Please ring doorbell
+        cancellation_reason:
+          type: string
+          nullable: true
+          example: null
+        estimated_preparation_time:
+          type: integer
+          nullable: true
+          description: Estimated prep time in minutes
+          example: 25
+        estimated_delivery_time:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T15:25:00Z
+        is_active:
+          type: boolean
+          example: true
+
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 101
+        order_id:
+          type: integer
+          example: 42
+        menu_item_name:
+          type: string
+          example: Margherita Pizza
+        menu_item_description:
+          type: string
+          nullable: true
+          example: Fresh mozzarella, tomato sauce, basil
+        price_at_time:
+          type: number
+          format: float
+          example: 12.99
+        quantity:
+          type: integer
+          example: 2
+        customizations:
+          type: object
+          example:
+            size: large
+            toppings: [extra cheese, mushrooms]
+        line_total:
+          type: number
+          format: float
+          example: 25.98
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T14:30:00Z
+        updated_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T14:30:00Z
+
+    OrderStatusHistory:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 201
+        order_id:
+          type: integer
+          example: 42
+        user_id:
+          type: integer
+          nullable: true
+          example: 10
+        from_status:
+          type: string
+          nullable: true
+          example: pending
+        to_status:
+          type: string
+          example: confirmed
+        notes:
+          type: string
+          nullable: true
+          example: Confirmed by vendor
+        metadata:
+          type: object
+          nullable: true
+          example: {}
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T14:32:00Z
+
+    CreateOrderRequest:
+      type: object
+      required:
+        - restaurant_id
+        - delivery_address_id
+        - items
+      properties:
+        restaurant_id:
+          type: integer
+          example: 3
+        delivery_address_id:
+          type: integer
+          example: 7
+        special_instructions:
+          type: string
+          example: Please ring doorbell
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CreateOrderItemRequest'
+
+    CreateOrderItemRequest:
+      type: object
+      required:
+        - menu_item_name
+        - price
+        - quantity
+      properties:
+        menu_item_name:
+          type: string
+          example: Margherita Pizza
+        menu_item_description:
+          type: string
+          example: Fresh mozzarella, tomato sauce, basil
+        price:
+          type: number
+          format: float
+          minimum: 0.01
+          example: 12.99
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+        customizations:
+          type: object
+          example:
+            size: large
+            toppings: [extra cheese]
+
+    UpdateOrderStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [confirmed, preparing, ready, driver_assigned, picked_up, in_transit, delivered, cancelled]
+          example: confirmed
+        notes:
+          type: string
+          example: Confirmed by vendor, order in queue
+        estimated_preparation_time:
+          type: integer
+          description: Estimated prep time in minutes
+          example: 25
+
+    CancelOrderRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          example: Changed my mind
+
+    OrderDetailsResponse:
+      type: object
+      properties:
+        order:
+          $ref: '#/components/schemas/Order'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        status_history:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderStatusHistory'
+
+    OrderStats:
+      type: object
+      properties:
+        total_orders:
+          type: integer
+          example: 168
+        pending_orders:
+          type: integer
+          example: 15
+        confirmed_orders:
+          type: integer
+          example: 8
+        delivered_orders:
+          type: integer
+          example: 142
+        cancelled_orders:
+          type: integer
+          example: 3
+        total_revenue:
+          type: number
+          format: float
+          example: 6543.21
+        average_order_value:
+          type: number
+          format: float
+          example: 46.08

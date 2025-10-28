@@ -1,0 +1,221 @@
+package main
+
+import (
+	"delivery_app/backend/config"
+	"delivery_app/backend/database"
+	"delivery_app/backend/handlers"
+	"delivery_app/backend/middleware"
+	"log"
+	"net/http"
+
+	"github.com/gorilla/mux"
+	_ "github.com/joho/godotenv/autoload"
+)
+
+func main() {
+	// Load configuration
+	conf, err := config.Load()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
+
+	log.Printf("Starting Delivery App API Server...")
+	log.Printf("Environment: %s", conf.Environment)
+	log.Printf("Server Port: %s", conf.ServerPort)
+
+	// Validate JWT configuration
+	log.Printf("=== JWT Configuration ===")
+	log.Printf("JWT Secret Length: %d characters", len(conf.JWTSecret))
+	log.Printf("Token Duration: %d hours", conf.TokenDuration)
+	log.Printf("Environment: %s", conf.Environment)
+	if conf.Environment == "development" {
+		log.Printf("⚠️  Using development JWT secret - DO NOT use in production!")
+		log.Printf("Secret prefix: %s...", conf.JWTSecret[:min(8, len(conf.JWTSecret))])
+	}
+	if len(conf.JWTSecret) < 32 {
+		log.Printf("⚠️  WARNING: JWT_SECRET is shorter than recommended (32+ chars)")
+	}
+	log.Printf("========================")
+
+	// Initialize database and repositories
+	app, err := database.CreateApp(conf.DatabaseURL)
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	defer app.Close()
+
+	// Initialize handlers
+	h := handlers.NewHandler(app, conf.JWTSecret)
+
+	// Setup router
+	router := mux.NewRouter()
+
+	// Health check
+	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"healthy","service":"delivery_app"}`))
+	}).Methods("GET")
+
+	// API routes
+	api := router.PathPrefix("/api").Subrouter()
+
+	// Public routes (no authentication required)
+	api.HandleFunc("/login", h.Login).Methods("POST", "OPTIONS")
+	api.HandleFunc("/signup", h.Signup).Methods("POST", "OPTIONS")
+
+	// Debug endpoint (development only)
+	if conf.Environment == "development" {
+		api.HandleFunc("/debug/token-info", h.DebugTokenInfo).Methods("GET", "OPTIONS")
+		log.Println("⚠️  Debug endpoint enabled: GET /api/debug/token-info")
+	}
+
+	// Protected routes (authentication required)
+	protected := api.PathPrefix("/").Subrouter()
+	protected.Use(middleware.AuthMiddleware(conf.JWTSecret))
+
+	// User profile route (example)
+	protected.HandleFunc("/profile", h.GetProfile).Methods("GET", "OPTIONS")
+
+	// Address GET routes (accessible by all authenticated users)
+	protected.HandleFunc("/addresses", h.GetAddresses).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/addresses/{id}", h.GetAddress).Methods("GET", "OPTIONS")
+
+	// Restaurant GET routes (accessible by all authenticated users)
+	protected.HandleFunc("/restaurants", h.GetRestaurants).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/restaurants/{id}", h.GetRestaurant).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/restaurants/{restaurant_id}/owner", h.GetRestaurantOwner).Methods("GET", "OPTIONS")
+
+	// Public menu endpoint (customers can view active menu for a restaurant)
+	protected.HandleFunc("/restaurants/{restaurant_id}/menu", h.GetRestaurantMenu).Methods("GET", "OPTIONS")
+
+	// Admin-only routes
+	adminRoutes := api.PathPrefix("/admin").Subrouter()
+	adminRoutes.Use(middleware.AuthMiddleware(conf.JWTSecret))
+	adminRoutes.Use(middleware.RequireUserType("admin"))
+
+	// Vendor-restaurant relationship management (admin only)
+	adminRoutes.HandleFunc("/vendor-restaurants", h.GetVendorRestaurants).Methods("GET", "OPTIONS")
+	adminRoutes.HandleFunc("/vendor-restaurants/{id}", h.GetVendorRestaurant).Methods("GET", "OPTIONS")
+	adminRoutes.HandleFunc("/vendor-restaurants/{id}", h.DeleteVendorRestaurant).Methods("DELETE", "OPTIONS")
+	adminRoutes.HandleFunc("/restaurants/{restaurant_id}/transfer", h.TransferRestaurantOwnership).Methods("PUT", "OPTIONS")
+
+	// Admin menu management (view all menus in system)
+	adminRoutes.HandleFunc("/menus", h.GetAllMenus).Methods("GET", "OPTIONS")
+
+	// Admin approval routes
+	adminRoutes.HandleFunc("/approvals/vendors", h.GetPendingVendors).Methods("GET", "OPTIONS")
+	adminRoutes.HandleFunc("/approvals/restaurants", h.GetPendingRestaurants).Methods("GET", "OPTIONS")
+	adminRoutes.HandleFunc("/approvals/dashboard", h.GetApprovalDashboard).Methods("GET", "OPTIONS")
+	adminRoutes.HandleFunc("/vendors/{id}/approve", h.ApproveVendor).Methods("PUT", "OPTIONS")
+	adminRoutes.HandleFunc("/vendors/{id}/reject", h.RejectVendor).Methods("PUT", "OPTIONS")
+	adminRoutes.HandleFunc("/restaurants/{id}/approve", h.ApproveRestaurant).Methods("PUT", "OPTIONS")
+	adminRoutes.HandleFunc("/restaurants/{id}/reject", h.RejectRestaurant).Methods("PUT", "OPTIONS")
+	adminRoutes.HandleFunc("/approvals/history", h.GetApprovalHistory).Methods("GET", "OPTIONS")
+
+	// Admin order routes (Phase 1: Core Order System)
+	adminRoutes.HandleFunc("/orders", h.GetAllOrders).Methods("GET", "OPTIONS")
+	adminRoutes.HandleFunc("/orders/{id}", h.GetAdminOrderDetails).Methods("GET", "OPTIONS")
+	adminRoutes.HandleFunc("/orders/{id}", h.UpdateAdminOrder).Methods("PUT", "OPTIONS")
+	adminRoutes.HandleFunc("/orders/stats", h.GetOrderStats).Methods("GET", "OPTIONS")
+	adminRoutes.HandleFunc("/orders/export", h.ExportOrders).Methods("GET", "OPTIONS")
+
+	// Admin system settings routes
+	adminRoutes.HandleFunc("/settings", h.GetSystemSettings).Methods("GET", "OPTIONS")
+	adminRoutes.HandleFunc("/settings/categories", h.GetCategories).Methods("GET", "OPTIONS")
+	adminRoutes.HandleFunc("/settings/{key}", h.GetSettingByKey).Methods("GET", "OPTIONS")
+	adminRoutes.HandleFunc("/settings/{key}", h.UpdateSetting).Methods("PUT", "OPTIONS")
+	adminRoutes.HandleFunc("/settings", h.UpdateMultipleSettings).Methods("PUT", "OPTIONS")
+
+	// Vendor-only routes
+	vendorRoutes := api.PathPrefix("/vendor").Subrouter()
+	vendorRoutes.Use(middleware.AuthMiddleware(conf.JWTSecret))
+	vendorRoutes.Use(middleware.RequireUserType("vendor"))
+
+	// Restaurant management (vendors create, update, delete their own restaurants)
+	vendorRoutes.HandleFunc("/restaurants", h.CreateRestaurant).Methods("POST", "OPTIONS")
+	vendorRoutes.HandleFunc("/restaurants/{id}", h.UpdateRestaurant).Methods("PUT", "OPTIONS")
+	vendorRoutes.HandleFunc("/restaurants/{id}", h.DeleteRestaurant).Methods("DELETE", "OPTIONS")
+
+	// Menu management (vendors manage their menus)
+	vendorRoutes.HandleFunc("/menus", h.CreateMenu).Methods("POST", "OPTIONS")
+	vendorRoutes.HandleFunc("/menus", h.GetVendorMenus).Methods("GET", "OPTIONS")
+	vendorRoutes.HandleFunc("/menus/{id}", h.GetMenu).Methods("GET", "OPTIONS")
+	vendorRoutes.HandleFunc("/menus/{id}", h.UpdateMenu).Methods("PUT", "OPTIONS")
+	vendorRoutes.HandleFunc("/menus/{id}", h.DeleteMenu).Methods("DELETE", "OPTIONS")
+
+	// Restaurant-menu assignment (vendors assign menus to their restaurants)
+	vendorRoutes.HandleFunc("/restaurants/{restaurant_id}/menus/{menu_id}", h.AssignMenuToRestaurant).Methods("POST", "OPTIONS")
+	vendorRoutes.HandleFunc("/restaurants/{restaurant_id}/menus/{menu_id}", h.UnassignMenuFromRestaurant).Methods("DELETE", "OPTIONS")
+	vendorRoutes.HandleFunc("/restaurants/{restaurant_id}/active-menu", h.SetActiveMenu).Methods("PUT", "OPTIONS")
+
+	// Image upload (vendors upload menu item images)
+	vendorRoutes.HandleFunc("/upload-image", h.UploadImage).Methods("POST", "OPTIONS")
+	vendorRoutes.HandleFunc("/images/{filename}", h.DeleteImage).Methods("DELETE", "OPTIONS")
+
+	// Vendor approval status check
+	vendorRoutes.HandleFunc("/approval-status", h.GetVendorApprovalStatus).Methods("GET", "OPTIONS")
+
+	// Vendor order routes (Phase 1: Core Order System)
+	vendorRoutes.HandleFunc("/orders", h.GetVendorOrders).Methods("GET", "OPTIONS")
+	vendorRoutes.HandleFunc("/orders/by-status", h.GetVendorOrdersByStatus).Methods("GET", "OPTIONS")
+	vendorRoutes.HandleFunc("/orders/stats", h.GetVendorOrderStats).Methods("GET", "OPTIONS")
+	vendorRoutes.HandleFunc("/orders/{id}", h.GetVendorOrderDetails).Methods("GET", "OPTIONS")
+	vendorRoutes.HandleFunc("/orders/{id}", h.UpdateOrderStatus).Methods("PUT", "OPTIONS")
+
+	// Customer-only routes
+	customerRoutes := api.PathPrefix("/customer").Subrouter()
+	customerRoutes.Use(middleware.AuthMiddleware(conf.JWTSecret))
+	customerRoutes.Use(middleware.RequireUserType("customer"))
+
+	// Customer address mutation routes (create, update, delete)
+	customerRoutes.HandleFunc("/addresses", h.CreateAddress).Methods("POST", "OPTIONS")
+	customerRoutes.HandleFunc("/addresses/{id}", h.UpdateAddress).Methods("PUT", "OPTIONS")
+	customerRoutes.HandleFunc("/addresses/{id}", h.DeleteAddress).Methods("DELETE", "OPTIONS")
+	customerRoutes.HandleFunc("/addresses/{id}/set-default", h.SetDefaultAddress).Methods("PUT", "OPTIONS")
+
+	// Customer order routes (Phase 1: Core Order System)
+	customerRoutes.HandleFunc("/orders", h.CreateOrder).Methods("POST", "OPTIONS")
+	customerRoutes.HandleFunc("/orders", h.GetCustomerOrders).Methods("GET", "OPTIONS")
+	customerRoutes.HandleFunc("/orders/{id}", h.GetOrderDetails).Methods("GET", "OPTIONS")
+	customerRoutes.HandleFunc("/orders/{id}/cancel", h.CancelOrder).Methods("PUT", "OPTIONS")
+
+	// Driver-only routes
+	driverRoutes := api.PathPrefix("/driver").Subrouter()
+	driverRoutes.Use(middleware.AuthMiddleware(conf.JWTSecret))
+	driverRoutes.Use(middleware.RequireUserType("driver"))
+
+	// Driver order routes (Phase 1: Core Order System)
+	driverRoutes.HandleFunc("/orders/available", h.GetAvailableOrders).Methods("GET", "OPTIONS")
+	driverRoutes.HandleFunc("/orders", h.GetDriverOrders).Methods("GET", "OPTIONS")
+	driverRoutes.HandleFunc("/orders/{id}", h.GetDriverOrderDetails).Methods("GET", "OPTIONS")
+	driverRoutes.HandleFunc("/orders/{id}/assign", h.AssignOrderToDriver).Methods("POST", "OPTIONS")
+	driverRoutes.HandleFunc("/orders/{id}/status", h.UpdateDriverOrderStatus).Methods("PUT", "OPTIONS")
+
+	// Static file serving for uploaded images
+	// Serve from /uploads/ directory
+	uploadsPath := "uploads"
+	router.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadsPath))))
+
+	// Apply middleware (order matters - CORS should be first)
+	router.Use(CORSMiddleware)      // Must be first to handle preflight requests
+	router.Use(RecoveryMiddleware)  // Catch panics
+	router.Use(LoggingMiddleware)   // Log requests
+
+	// Start server
+	addr := ":" + conf.ServerPort
+	log.Printf("Server listening on %s", addr)
+	log.Printf("Health check: http://localhost%s/health", addr)
+	log.Printf("API endpoints: http://localhost%s/api/*", addr)
+
+	if err := http.ListenAndServe(addr, router); err != nil {
+		log.Fatalf("Server failed to start: %v", err)
+	}
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

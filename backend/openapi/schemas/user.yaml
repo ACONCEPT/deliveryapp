@@ -1,0 +1,235 @@
+ProfileResponse:
+  type: object
+  properties:
+    success:
+      type: boolean
+      example: true
+    user:
+      $ref: './user.yaml#/User'
+    profile:
+      oneOf:
+        - $ref: './user.yaml#/Customer'
+        - $ref: './user.yaml#/Vendor'
+        - $ref: './user.yaml#/Driver'
+        - $ref: './user.yaml#/Admin'
+    auth_info:
+      type: object
+      properties:
+        user_id:
+          type: integer
+          example: 1
+        username:
+          type: string
+          example: customer1
+        user_type:
+          type: string
+          example: customer
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        username:
+          type: string
+          example: customer1
+        email:
+          type: string
+          format: email
+          example: customer1@example.com
+        user_type:
+          type: string
+          enum: [customer, vendor, driver, admin]
+          example: customer
+        user_role:
+          type: string
+          description: User role, typically matches user_type but can be customized
+          example: customer
+        status:
+          type: string
+          enum: [active, inactive, suspended]
+          example: active
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+        updated_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+
+    Customer:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 1
+        full_name:
+          type: string
+          example: John Doe
+        phone:
+          type: string
+          nullable: true
+          example: "+1234567890"
+        default_address_id:
+          type: integer
+          nullable: true
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Vendor:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 2
+        business_name:
+          type: string
+          example: Joe's Pizza
+        description:
+          type: string
+          nullable: true
+          example: Best pizza in town
+        phone:
+          type: string
+          nullable: true
+          example: "+1234567890"
+        address_line1:
+          type: string
+          nullable: true
+        address_line2:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+        postal_code:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          format: double
+          nullable: true
+        longitude:
+          type: number
+          format: double
+          nullable: true
+        is_active:
+          type: boolean
+          example: true
+        rating:
+          type: number
+          format: double
+          example: 4.5
+        total_orders:
+          type: integer
+          example: 100
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Driver:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 3
+        full_name:
+          type: string
+          example: Jane Smith
+        phone:
+          type: string
+          example: "+1234567890"
+        vehicle_type:
+          type: string
+          nullable: true
+          example: Car
+        vehicle_plate:
+          type: string
+          nullable: true
+          example: ABC-123
+        license_number:
+          type: string
+          nullable: true
+          example: D1234567
+        is_available:
+          type: boolean
+          example: true
+        current_latitude:
+          type: number
+          format: double
+          nullable: true
+        current_longitude:
+          type: number
+          format: double
+          nullable: true
+        rating:
+          type: number
+          format: double
+          example: 4.8
+        total_deliveries:
+          type: integer
+          example: 250
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Admin:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 4
+        full_name:
+          type: string
+          example: Admin User
+        phone:
+          type: string
+          nullable: true
+          example: "+1234567890"
+        role:
+          type: string
+          nullable: true
+          example: System Administrator
+        permissions:
+          type: string
+          nullable: true
+          description: JSONB stored as string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CustomerAddress:

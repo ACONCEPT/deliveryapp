@@ -1,0 +1,565 @@
+
+  /api/vendor/menus:
+    post:
+      summary: Create menu
+      description: Create a new menu (vendor only)
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/menu.yaml#/CreateMenuRequest'
+      responses:
+        '201':
+          description: Menu created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Menu created successfully
+                  menu:
+                    $ref: '#/components/schemas/Menu'
+        '400':
+          description: Invalid request body or menu_config
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to create menu
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+    get:
+      summary: Get vendor menus
+      description: List all menus for the authenticated vendor with assigned restaurant info
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: restaurant_id
+          in: query
+          description: Filter by specific restaurant
+          required: false
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Menus retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  menus:
+                    type: array
+                    items:
+                      $ref: '../schemas/menu.yaml#/MenuWithRestaurants'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to fetch menus
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/vendor/menus/{id}:
+    get:
+      summary: Get menu by ID
+      description: Get a specific menu with full details (vendor must own the menu)
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Menu ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Menu retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  menu:
+                    $ref: '#/components/schemas/Menu'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Access denied (vendor doesn't own this menu)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Menu not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+    put:
+      summary: Update menu
+      description: Update an existing menu (vendor must own the menu)
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Menu ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/menu.yaml#/UpdateMenuRequest'
+      responses:
+        '200':
+          description: Menu updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Menu updated successfully
+                  menu:
+                    $ref: '#/components/schemas/Menu'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Menu not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to update menu
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+    delete:
+      summary: Delete menu
+      description: Delete a menu (only if not assigned to any restaurants)
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Menu ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Menu deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Menu deleted successfully
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Menu not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '409':
+          description: Cannot delete menu - it is assigned to restaurant(s)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to delete menu
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/vendor/restaurants/{restaurant_id}/menus/{menu_id}:
+    post:
+      summary: Assign menu to restaurant
+      description: Assign a menu to a restaurant (vendor must own both)
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: restaurant_id
+          in: path
+          description: Restaurant ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+        - name: menu_id
+          in: path
+          description: Menu ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/menu.yaml#/AssignMenuRequest'
+      responses:
+        '201':
+          description: Menu assigned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Menu assigned to restaurant successfully
+                  restaurant_menu:
+                    $ref: '../schemas/menu.yaml#/RestaurantMenu'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Access denied (don't own restaurant or menu)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '409':
+          description: Menu already assigned to restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to assign menu
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+    delete:
+      summary: Unassign menu from restaurant
+      description: Remove menu assignment from restaurant
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: restaurant_id
+          in: path
+          description: Restaurant ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+        - name: menu_id
+          in: path
+          description: Menu ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Menu unassigned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Menu unassigned from restaurant successfully
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to unassign menu
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/vendor/restaurants/{restaurant_id}/active-menu:
+    put:
+      summary: Set active menu
+      description: Set the active menu for a restaurant (menu must be assigned first)
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: restaurant_id
+          in: path
+          description: Restaurant ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/menu.yaml#/SetActiveMenuRequest'
+      responses:
+        '200':
+          description: Active menu updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Active menu updated successfully
+        '400':
+          description: Invalid request or menu not assigned to restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to set active menu
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/restaurants/{restaurant_id}/menu:
+    get:
+      summary: Get restaurant menu
+      description: Get the active menu for a restaurant (customer view)
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: restaurant_id
+          in: path
+          description: Restaurant ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Menu retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  restaurant:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      name:
+                        type: string
+                        example: Pizza Palace
+                      description:
+                        type: string
+                        nullable: true
+                        example: Best pizza in town
+                  menu:
+                    $ref: '#/components/schemas/Menu'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Restaurant not found or no active menu
+          content:
+            application/json:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/admin/menus:
+    get:
+      summary: Get all menus
+      description: List all menus in the system (admin only)
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: vendor_id
+          in: query
+          description: Filter by vendor
+          required: false
+          schema:
+            type: integer
+            example: 1
+        - name: restaurant_id
+          in: query
+          description: Filter by restaurant assignment
+          required: false
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Menus retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  menus:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Menu'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to fetch menus
+          content:
+            application/json:

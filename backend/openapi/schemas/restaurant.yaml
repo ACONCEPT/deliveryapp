@@ -1,0 +1,218 @@
+    Restaurant:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Pizza Palace
+        description:
+          type: string
+          nullable: true
+          example: Authentic Italian pizza and pasta
+        phone:
+          type: string
+          nullable: true
+          example: "+1234567891"
+        address_line1:
+          type: string
+          nullable: true
+          example: 123 Main St
+        address_line2:
+          type: string
+          nullable: true
+          example: Suite 100
+        city:
+          type: string
+          nullable: true
+          example: New York
+        state:
+          type: string
+          nullable: true
+          example: NY
+        postal_code:
+          type: string
+          nullable: true
+          example: "10001"
+        country:
+          type: string
+          nullable: true
+          example: USA
+        latitude:
+          type: number
+          format: double
+          nullable: true
+          example: 40.7128
+        longitude:
+          type: number
+          format: double
+          nullable: true
+          example: -74.0060
+        hours_of_operation:
+          type: string
+          nullable: true
+          description: 'Weekly operating hours in JSON format. Example: {"monday": {"open": "09:00", "close": "22:00", "closed": false}, ...}'
+          example: '{"monday": {"open": "09:00", "close": "22:00", "closed": false}, "tuesday": {"open": "09:00", "close": "22:00", "closed": false}, "wednesday": {"open": "09:00", "close": "22:00", "closed": false}, "thursday": {"open": "09:00", "close": "22:00", "closed": false}, "friday": {"open": "09:00", "close": "23:00", "closed": false}, "saturday": {"open": "10:00", "close": "23:00", "closed": false}, "sunday": {"open": "10:00", "close": "22:00", "closed": false}}'
+        is_active:
+          type: boolean
+          example: true
+        rating:
+          type: number
+          format: double
+          example: 4.5
+        total_orders:
+          type: integer
+          example: 150
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+        updated_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+
+    VendorRestaurant:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        vendor_id:
+          type: integer
+          example: 1
+        restaurant_id:
+          type: integer
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+        updated_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+
+    CreateRestaurantRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: Pizza Palace
+        description:
+          type: string
+          nullable: true
+          example: Authentic Italian pizza and pasta
+        phone:
+          type: string
+          nullable: true
+          example: "+1234567891"
+        address_line1:
+          type: string
+          nullable: true
+          example: 123 Main St
+        address_line2:
+          type: string
+          nullable: true
+          example: Suite 100
+        city:
+          type: string
+          nullable: true
+          example: New York
+        state:
+          type: string
+          nullable: true
+          example: NY
+        postal_code:
+          type: string
+          nullable: true
+          example: "10001"
+        country:
+          type: string
+          nullable: true
+          example: USA
+        latitude:
+          type: number
+          format: double
+          nullable: true
+          example: 40.7128
+        longitude:
+          type: number
+          format: double
+          nullable: true
+          example: -74.0060
+        hours_of_operation:
+          type: string
+          nullable: true
+          description: 'Weekly operating hours in JSON format. Example: {"monday": {"open": "09:00", "close": "22:00", "closed": false}, ...}'
+          example: '{"monday": {"open": "09:00", "close": "22:00", "closed": false}, "tuesday": {"open": "09:00", "close": "22:00", "closed": false}, "wednesday": {"open": "09:00", "close": "22:00", "closed": false}, "thursday": {"open": "09:00", "close": "22:00", "closed": false}, "friday": {"open": "09:00", "close": "23:00", "closed": false}, "saturday": {"open": "10:00", "close": "23:00", "closed": false}, "sunday": {"open": "10:00", "close": "22:00", "closed": false}}'
+
+    UpdateRestaurantRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+          example: Pizza Palace NYC
+        description:
+          type: string
+          nullable: true
+          example: Best authentic Italian pizza in town
+        phone:
+          type: string
+          nullable: true
+          example: "+1234567891"
+        address_line1:
+          type: string
+          nullable: true
+          example: 456 Oak Ave
+        address_line2:
+          type: string
+          nullable: true
+          example: Floor 2
+        city:
+          type: string
+          nullable: true
+          example: Brooklyn
+        state:
+          type: string
+          nullable: true
+          example: NY
+        postal_code:
+          type: string
+          nullable: true
+          example: "11201"
+        country:
+          type: string
+          nullable: true
+          example: USA
+        latitude:
+          type: number
+          format: double
+          nullable: true
+          example: 40.6782
+        longitude:
+          type: number
+          format: double
+          nullable: true
+          example: -73.9442
+        hours_of_operation:
+          type: string
+          nullable: true
+          description: 'Weekly operating hours in JSON format. Example: {"monday": {"open": "09:00", "close": "22:00", "closed": false}, ...}'
+          example: '{"monday": {"open": "09:00", "close": "22:00", "closed": false}, "tuesday": {"open": "09:00", "close": "22:00", "closed": false}, "wednesday": {"open": "09:00", "close": "22:00", "closed": false}, "thursday": {"open": "09:00", "close": "22:00", "closed": false}, "friday": {"open": "09:00", "close": "23:00", "closed": false}, "saturday": {"open": "10:00", "close": "23:00", "closed": false}, "sunday": {"open": "10:00", "close": "22:00", "closed": false}}'
+        is_active:
+          type: boolean
+          nullable: true
+          example: true
+
+    Menu:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:

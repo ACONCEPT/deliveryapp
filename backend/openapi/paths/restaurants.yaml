@@ -1,0 +1,584 @@
+
+  /api/restaurants:
+    get:
+      summary: Get restaurants
+      description: |
+        Retrieve restaurants. Behavior varies by user type:
+        - **Vendors**: Get only their own restaurants
+        - **Admins**: Get all restaurants
+        - **Customers/Drivers**: Get all active restaurants
+      tags:
+        - Restaurants
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Restaurants retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  restaurants:
+                    type: array
+                    items:
+                      $ref: '../schemas/restaurant.yaml#/Restaurant'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to retrieve restaurants
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/restaurants/{id}:
+    get:
+      summary: Get specific restaurant
+      description: |
+        Retrieve a specific restaurant by ID. Access rules:
+        - **Vendors**: Can only view their own restaurants
+        - **Customers/Drivers**: Can only view active restaurants
+        - **Admins**: Can view any restaurant
+      tags:
+        - Restaurants
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Restaurant ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Restaurant retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  restaurant:
+                    $ref: '../schemas/restaurant.yaml#/Restaurant'
+        '400':
+          description: Invalid restaurant ID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Restaurant not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/restaurants/{restaurant_id}/owner:
+    get:
+      summary: Get restaurant owner
+      description: Retrieve the vendor who owns a specific restaurant
+      tags:
+        - Restaurants
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: restaurant_id
+          in: path
+          description: Restaurant ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Restaurant owner retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  vendor_restaurant:
+                    $ref: '../schemas/restaurant.yaml#/VendorRestaurant'
+                  vendor:
+                    $ref: '../schemas/user.yaml#/Vendor'
+        '400':
+          description: Invalid restaurant ID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: No vendor found for this restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to retrieve vendor information
+          content:
+            application/json:
+
+  /api/vendor/restaurants:
+    post:
+      summary: Create restaurant
+      description: |
+        Create a new restaurant. Ownership is automatically assigned to the authenticated vendor.
+        The system will:
+        1. Create the restaurant
+        2. Query the vendor table using the authenticated user's ID
+        3. Create a vendor_restaurants relationship linking the vendor to the restaurant
+      tags:
+        - Restaurants
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/restaurant.yaml#/CreateRestaurantRequest'
+      responses:
+        '201':
+          description: Restaurant created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Restaurant created successfully
+                  restaurant:
+                    $ref: '../schemas/restaurant.yaml#/Restaurant'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Only vendors can create restaurants
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to create restaurant or assign ownership
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/vendor/restaurants/{id}:
+    put:
+      summary: Update restaurant
+      description: Update an existing restaurant (only the owning vendor or admin can update)
+      tags:
+        - Restaurants
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Restaurant ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/restaurant.yaml#/UpdateRestaurantRequest'
+      responses:
+        '200':
+          description: Restaurant updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Restaurant updated successfully
+                  restaurant:
+                    $ref: '../schemas/restaurant.yaml#/Restaurant'
+        '400':
+          description: Invalid request body or restaurant ID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Access denied (not the owner)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Restaurant not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to update restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+    delete:
+      summary: Delete restaurant
+      description: |
+        Delete a restaurant (only the owning vendor or admin can delete).
+        Cascade delete will automatically remove the vendor_restaurants relationship.
+      tags:
+        - Restaurants
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Restaurant ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Restaurant deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Restaurant deleted successfully
+        '400':
+          description: Invalid restaurant ID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Access denied (not the owner)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Restaurant not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to delete restaurant
+          content:
+            application/json:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/admin/vendor-restaurants:
+    get:
+      summary: Get all vendor-restaurant relationships
+      description: Retrieve all vendor-restaurant ownership relationships (admin only)
+      tags:
+        - Vendor-Restaurants
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Relationships retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  vendor_restaurants:
+                    type: array
+                    items:
+                      $ref: '../schemas/restaurant.yaml#/VendorRestaurant'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to retrieve relationships
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/admin/vendor-restaurants/{id}:
+    get:
+      summary: Get specific vendor-restaurant relationship
+      description: Retrieve a specific vendor-restaurant relationship (admins can access any, vendors can access their own)
+      tags:
+        - Vendor-Restaurants
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Vendor-Restaurant relationship ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Relationship retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  vendor_restaurant:
+                    $ref: '../schemas/restaurant.yaml#/VendorRestaurant'
+        '400':
+          description: Invalid relationship ID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Relationship not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+    delete:
+      summary: Delete vendor-restaurant relationship
+      description: |
+        Remove a vendor-restaurant relationship (admin only).
+        WARNING: This orphans the restaurant (no vendor owns it).
+      tags:
+        - Vendor-Restaurants
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Vendor-Restaurant relationship ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Relationship deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Vendor-restaurant relationship deleted successfully
+        '400':
+          description: Invalid relationship ID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Relationship not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to delete relationship
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/admin/restaurants/{restaurant_id}/transfer:
+    put:
+      summary: Transfer restaurant ownership
+      description: Transfer restaurant ownership to a new vendor (admin only)
+      tags:
+        - Vendor-Restaurants
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: restaurant_id
+          in: path
+          description: Restaurant ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - new_vendor_id
+              properties:
+                new_vendor_id:
+                  type: integer
+                  description: ID of the vendor to transfer ownership to
+                  example: 2
+      responses:
+        '200':
+          description: Ownership transferred successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Restaurant ownership transferred successfully
+        '400':
+          description: Invalid restaurant ID or vendor ID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Restaurant or vendor not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to transfer ownership
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+
+  # ========================================================================
+  # ORDER ENDPOINTS

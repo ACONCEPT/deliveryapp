@@ -1,0 +1,74 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║              DELIVERY APP - TEST USER ACCOUNTS                       ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+Created: October 21, 2025
+API Endpoint: http://localhost:8080/api/login
+
+═══════════════════════════════════════════════════════════════════════
+
+📋 CUSTOMER ACCOUNT
+  Username: testcustomer
+  Password: password123
+  Email:    test@example.com
+  Type:     customer
+  Profile:  Test Customer
+  Phone:    +1234567890
+
+═══════════════════════════════════════════════════════════════════════
+
+🏪 VENDOR ACCOUNT
+  Username: testvendor
+  Password: password123
+  Email:    vendor@example.com
+  Type:     vendor
+  Profile:  Test Vendor
+  Business: Test Restaurant
+  Phone:    +1234567890
+
+═══════════════════════════════════════════════════════════════════════
+
+🚗 DRIVER ACCOUNT
+  Username: testdriver
+  Password: password123
+  Email:    driver@example.com
+  Type:     driver
+  Profile:  Test Driver
+  Phone:    +1234567890
+  Vehicle:  Car (ABC123)
+
+═══════════════════════════════════════════════════════════════════════
+
+👤 ADMIN ACCOUNT
+  Username: testadmin
+  Password: password123
+  Email:    admin@example.com
+  Type:     admin
+  Profile:  Test Admin
+  Phone:    +1234567890
+
+═══════════════════════════════════════════════════════════════════════
+
+🔐 LOGIN INSTRUCTIONS:
+
+1. API Login (curl):
+   curl -X POST http://localhost:8080/api/login \
+     -H "Content-Type: application/json" \
+     -d '{"username":"testcustomer","password":"password123"}'
+
+2. Flutter App:
+   - Launch the app
+   - Enter username and password
+   - Tap "Login"
+   - View confirmation screen with user details
+
+═══════════════════════════════════════════════════════════════════════
+
+📝 NOTES:
+  • All passwords use bcrypt hashing
+  • JWT tokens expire after 72 hours
+  • Each user type has specific profile fields
+  • Database: PostgreSQL on port 5433
+  • API: Go backend on port 8080
+
+═══════════════════════════════════════════════════════════════════════

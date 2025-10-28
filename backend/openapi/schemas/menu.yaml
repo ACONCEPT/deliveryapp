@@ -1,0 +1,231 @@
+    Menu:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Main Menu
+        description:
+          type: string
+          nullable: true
+          example: Our signature dishes
+        menu_config:
+          type: string
+          description: JSONB structure containing menu data (stored as JSON string)
+          example: '{"version":"1.0","categories":[{"id":"cat_1","name":"Pizzas","items":[{"id":"item_1","name":"Margherita","price":12.99}]}]}'
+        vendor_id:
+          type: integer
+          nullable: true
+          description: The vendor who owns this menu. NULL for system-wide menus created by admins.
+          example: 1
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+        updated_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+
+    MenuWithRestaurants:
+      allOf:
+        - $ref: 'Menu'
+        - type: object
+          properties:
+            assigned_restaurants:
+              type: array
+              items:
+                $ref: 'RestaurantMenuAssignment'
+
+    RestaurantMenuAssignment:
+      type: object
+      properties:
+        restaurant_id:
+          type: integer
+          example: 1
+        restaurant_name:
+          type: string
+          example: Pizza Palace
+        is_active:
+          type: boolean
+          example: true
+        display_order:
+          type: integer
+          example: 1
+
+    RestaurantMenu:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        restaurant_id:
+          type: integer
+          example: 1
+        menu_id:
+          type: integer
+          example: 1
+        is_active:
+          type: boolean
+          example: false
+        display_order:
+          type: integer
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+        updated_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+
+    CreateMenuRequest:
+      type: object
+      required:
+        - name
+        - menu_config
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Summer Menu
+        description:
+          type: string
+          example: Fresh seasonal offerings
+        menu_config:
+          type: string
+          description: JSON string containing menu structure
+          example: '{"version":"1.0","categories":[]}'
+        is_active:
+          type: boolean
+          default: true
+          example: true
+
+    UpdateMenuRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Updated Menu Name
+        description:
+          type: string
+          nullable: true
+          example: Updated description
+        menu_config:
+          type: string
+          description: JSON string containing menu structure
+          example: '{"version":"1.0","categories":[...]}'
+        is_active:
+          type: boolean
+          example: false
+
+    AssignMenuRequest:
+      type: object
+      properties:
+        is_active:
+          type: boolean
+          default: false
+          example: false
+        display_order:
+          type: integer
+          default: 0
+          example: 1
+
+    SetActiveMenuRequest:
+      type: object
+      required:
+        - menu_id
+      properties:
+        menu_id:
+          type: integer
+          example: 1
+
+    # ========================================================================
+    # SYSTEM SETTINGS SCHEMAS
+    # ========================================================================
+
+    SystemSetting:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        setting_key:
+          type: string
+          example: tax_rate
+        setting_value:
+          type: string
+          example: "0.085"
+        data_type:
+          type: string
+          enum: [string, number, boolean, json]
+          example: number
+        description:
+          type: string
+          example: "Sales tax rate (0.085 = 8.5%)"
+        category:
+          type: string
+          example: orders
+        is_editable:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SettingsByCategory:
+      type: object
+      additionalProperties:
+        type: array
+        items:
+          $ref: 'SystemSetting'
+      example:
+        orders:
+          - id: 1
+            setting_key: minimum_order_amount
+            setting_value: "10.00"
+            data_type: number
+            description: "Minimum order subtotal required in dollars"
+            category: orders
+            is_editable: true
+        payments:
+          - id: 5
+            setting_key: platform_commission_rate
+            setting_value: "0.15"
+            data_type: number
+            description: "Platform commission rate (0.15 = 15%)"
+            category: payments
+            is_editable: true
+
+    SettingsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Settings retrieved successfully"
+        data:
+          type: object
+          properties:
+            settings:
+              $ref: 'SettingsByCategory'
+            total_count:
+              type: integer
+              example: 18
+            categories_count:
+              type: integer
+              example: 5

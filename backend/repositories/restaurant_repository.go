@@ -1,0 +1,380 @@
+package repositories
+
+import (
+	"database/sql"
+	"delivery_app/backend/models"
+	"fmt"
+
+	"github.com/jmoiron/sqlx"
+)
+
+// RestaurantRepository defines the interface for restaurant data access
+type RestaurantRepository interface {
+	Create(restaurant *models.Restaurant) error
+	GetByID(id int) (*models.Restaurant, error)
+	GetAll() ([]models.Restaurant, error)
+	GetByVendorID(vendorID int) ([]models.Restaurant, error)
+	GetWithVendorInfo() ([]models.RestaurantWithVendor, error)
+	Update(restaurant *models.Restaurant) error
+	Delete(id int) error
+
+	// Restaurant approval methods
+	GetPendingRestaurants() ([]models.Restaurant, error)
+	GetApprovedRestaurants() ([]models.Restaurant, error)
+	ApproveRestaurant(restaurantID, adminID int) error
+	RejectRestaurant(restaurantID, adminID int, reason string) error
+
+	// Transaction methods
+	CreateWithVendor(restaurant *models.Restaurant, vendorID int) error
+
+	// Ownership verification methods
+	VerifyVendorOwnership(restaurantID, vendorID int) error
+	GetByIDWithOwnershipCheck(restaurantID, vendorID int) (*models.Restaurant, error)
+}
+
+// restaurantRepository implements the RestaurantRepository interface
+type restaurantRepository struct {
+	DB *sqlx.DB
+}
+
+// NewRestaurantRepository creates a new instance of RestaurantRepository
+func NewRestaurantRepository(db *sqlx.DB) RestaurantRepository {
+	return &restaurantRepository{DB: db}
+}
+
+// Create inserts a new restaurant into the database
+func (r *restaurantRepository) Create(restaurant *models.Restaurant) error {
+	query := r.DB.Rebind(`
+		INSERT INTO restaurants (name, description, phone, address_line1, address_line2,
+		                        city, state, postal_code, country, latitude, longitude,
+		                        hours_of_operation, is_active)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		RETURNING id, name, description, phone, address_line1, address_line2, city, state,
+		          postal_code, country, latitude, longitude, hours_of_operation, is_active,
+		          rating, total_orders, approval_status, approved_by_admin_id, approved_at,
+		          rejection_reason, created_at, updated_at
+	`)
+
+	args := []interface{}{
+		restaurant.Name,
+		restaurant.Description,
+		restaurant.Phone,
+		restaurant.AddressLine1,
+		restaurant.AddressLine2,
+		restaurant.City,
+		restaurant.State,
+		restaurant.PostalCode,
+		restaurant.Country,
+		restaurant.Latitude,
+		restaurant.Longitude,
+		restaurant.HoursOfOperation,
+		restaurant.IsActive, // is_active from parameter
+	}
+
+	return GetData(r.DB, query, restaurant, args)
+}
+
+// GetByID retrieves a restaurant by ID
+func (r *restaurantRepository) GetByID(id int) (*models.Restaurant, error) {
+	var restaurant models.Restaurant
+	query := r.DB.Rebind(`SELECT * FROM restaurants WHERE id = ?`)
+
+	err := r.DB.QueryRowx(query, id).StructScan(&restaurant)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("restaurant not found")
+		}
+		return nil, fmt.Errorf("failed to get restaurant: %w", err)
+	}
+
+	return &restaurant, nil
+}
+
+// GetAll retrieves all restaurants
+func (r *restaurantRepository) GetAll() ([]models.Restaurant, error) {
+	restaurants := make([]models.Restaurant, 0)
+	query := `SELECT * FROM restaurants ORDER BY name ASC`
+
+	err := SelectData(r.DB, query, &restaurants, []interface{}{})
+	if err != nil {
+		return restaurants, fmt.Errorf("failed to get restaurants: %w", err)
+	}
+
+	return restaurants, nil
+}
+
+// GetByVendorID retrieves all restaurants owned by a specific vendor
+func (r *restaurantRepository) GetByVendorID(vendorID int) ([]models.Restaurant, error) {
+	restaurants := make([]models.Restaurant, 0)
+	query := r.DB.Rebind(`
+		SELECT r.*
+		FROM restaurants r
+		INNER JOIN vendor_restaurants vr ON r.id = vr.restaurant_id
+		WHERE vr.vendor_id = ?
+		ORDER BY r.name ASC
+	`)
+
+	err := SelectData(r.DB, query, &restaurants, []interface{}{vendorID})
+	if err != nil {
+		return restaurants, fmt.Errorf("failed to get restaurants by vendor: %w", err)
+	}
+
+	return restaurants, nil
+}
+
+// GetWithVendorInfo retrieves all restaurants with their vendor information
+func (r *restaurantRepository) GetWithVendorInfo() ([]models.RestaurantWithVendor, error) {
+	restaurants := make([]models.RestaurantWithVendor, 0)
+	query := `
+		SELECT r.*, vr.vendor_id, v.business_name
+		FROM restaurants r
+		LEFT JOIN vendor_restaurants vr ON r.id = vr.restaurant_id
+		LEFT JOIN vendors v ON vr.vendor_id = v.id
+		ORDER BY r.name ASC
+	`
+
+	err := SelectData(r.DB, query, &restaurants, []interface{}{})
+	if err != nil {
+		return restaurants, fmt.Errorf("failed to get restaurants with vendor info: %w", err)
+	}
+
+	return restaurants, nil
+}
+
+// Update updates an existing restaurant
+func (r *restaurantRepository) Update(restaurant *models.Restaurant) error {
+	query := r.DB.Rebind(`
+		UPDATE restaurants
+		SET name = ?, description = ?, phone = ?, address_line1 = ?, address_line2 = ?,
+		    city = ?, state = ?, postal_code = ?, country = ?, latitude = ?, longitude = ?,
+		    hours_of_operation = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+		RETURNING id, name, description, phone, address_line1, address_line2, city, state,
+		          postal_code, country, latitude, longitude, hours_of_operation, is_active,
+		          rating, total_orders, approval_status, approved_by_admin_id, approved_at,
+		          rejection_reason, created_at, updated_at
+	`)
+
+	args := []interface{}{
+		restaurant.Name,
+		restaurant.Description,
+		restaurant.Phone,
+		restaurant.AddressLine1,
+		restaurant.AddressLine2,
+		restaurant.City,
+		restaurant.State,
+		restaurant.PostalCode,
+		restaurant.Country,
+		restaurant.Latitude,
+		restaurant.Longitude,
+		restaurant.HoursOfOperation,
+		restaurant.IsActive,
+		restaurant.ID,
+	}
+
+	return GetData(r.DB, query, restaurant, args)
+}
+
+// Delete deletes a restaurant by ID
+func (r *restaurantRepository) Delete(id int) error {
+	query := r.DB.Rebind(`DELETE FROM restaurants WHERE id = ?`)
+	args := []interface{}{id}
+
+	result, err := ExecuteStatement(r.DB, query, args)
+	if err != nil {
+		return fmt.Errorf("failed to delete restaurant: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("restaurant not found")
+	}
+
+	return nil
+}
+
+// GetPendingRestaurants retrieves all restaurants with pending approval status
+func (r *restaurantRepository) GetPendingRestaurants() ([]models.Restaurant, error) {
+	restaurants := make([]models.Restaurant, 0)
+	query := `
+		SELECT * FROM restaurants
+		WHERE approval_status = 'pending'
+		ORDER BY created_at ASC
+	`
+
+	err := SelectData(r.DB, query, &restaurants, []interface{}{})
+	if err != nil {
+		return restaurants, fmt.Errorf("failed to get pending restaurants: %w", err)
+	}
+
+	return restaurants, nil
+}
+
+// GetApprovedRestaurants retrieves all approved and active restaurants
+func (r *restaurantRepository) GetApprovedRestaurants() ([]models.Restaurant, error) {
+	restaurants := make([]models.Restaurant, 0)
+	query := `
+		SELECT * FROM restaurants
+		WHERE approval_status = 'approved' AND is_active = true
+		ORDER BY name ASC
+	`
+
+	err := SelectData(r.DB, query, &restaurants, []interface{}{})
+	if err != nil {
+		return restaurants, fmt.Errorf("failed to get approved restaurants: %w", err)
+	}
+
+	return restaurants, nil
+}
+
+// ApproveRestaurant approves a restaurant and sets it to active
+func (r *restaurantRepository) ApproveRestaurant(restaurantID, adminID int) error {
+	query := r.DB.Rebind(`
+		UPDATE restaurants
+		SET
+			approval_status = 'approved',
+			approved_by_admin_id = ?,
+			approved_at = CURRENT_TIMESTAMP,
+			is_active = true,
+			rejection_reason = NULL,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`)
+
+	args := []interface{}{adminID, restaurantID}
+
+	result, err := ExecuteStatement(r.DB, query, args)
+	if err != nil {
+		return fmt.Errorf("failed to approve restaurant: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("restaurant not found")
+	}
+
+	return nil
+}
+
+// RejectRestaurant rejects a restaurant with a reason
+func (r *restaurantRepository) RejectRestaurant(restaurantID, adminID int, reason string) error {
+	query := r.DB.Rebind(`
+		UPDATE restaurants
+		SET
+			approval_status = 'rejected',
+			approved_by_admin_id = ?,
+			approved_at = CURRENT_TIMESTAMP,
+			is_active = false,
+			rejection_reason = ?,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`)
+
+	args := []interface{}{adminID, reason, restaurantID}
+
+	result, err := ExecuteStatement(r.DB, query, args)
+	if err != nil {
+		return fmt.Errorf("failed to reject restaurant: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("restaurant not found")
+	}
+
+	return nil
+}
+
+// CreateWithVendor creates a restaurant and vendor relationship in a transaction
+func (r *restaurantRepository) CreateWithVendor(restaurant *models.Restaurant, vendorID int) error {
+	return WithTransaction(r.DB, func(tx *sqlx.Tx) error {
+		// Create the restaurant
+		query := tx.Rebind(`
+			INSERT INTO restaurants (name, description, phone, address_line1, address_line2,
+			                        city, state, postal_code, country, latitude, longitude,
+			                        hours_of_operation, is_active)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			RETURNING id, name, description, phone, address_line1, address_line2, city, state,
+			          postal_code, country, latitude, longitude, hours_of_operation, is_active,
+			          rating, total_orders, approval_status, approved_by_admin_id, approved_at,
+			          rejection_reason, created_at, updated_at
+		`)
+
+		args := []interface{}{
+			restaurant.Name,
+			restaurant.Description,
+			restaurant.Phone,
+			restaurant.AddressLine1,
+			restaurant.AddressLine2,
+			restaurant.City,
+			restaurant.State,
+			restaurant.PostalCode,
+			restaurant.Country,
+			restaurant.Latitude,
+			restaurant.Longitude,
+			restaurant.HoursOfOperation,
+			restaurant.IsActive,
+		}
+
+		err := tx.QueryRowx(query, args...).StructScan(restaurant)
+		if err != nil {
+			return fmt.Errorf("failed to create restaurant: %w", err)
+		}
+
+		// Create vendor-restaurant relationship
+		vrQuery := tx.Rebind(`
+			INSERT INTO vendor_restaurants (vendor_id, restaurant_id)
+			VALUES (?, ?)
+		`)
+
+		_, err = tx.Exec(vrQuery, vendorID, restaurant.ID)
+		if err != nil {
+			return fmt.Errorf("failed to create vendor-restaurant relationship: %w", err)
+		}
+
+		return nil
+	})
+}
+
+// VerifyVendorOwnership checks if a restaurant belongs to a vendor
+func (r *restaurantRepository) VerifyVendorOwnership(restaurantID, vendorID int) error {
+	var count int
+	query := r.DB.Rebind(`
+		SELECT COUNT(*) FROM vendor_restaurants
+		WHERE restaurant_id = ? AND vendor_id = ?
+	`)
+
+	err := r.DB.QueryRow(query, restaurantID, vendorID).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("failed to verify ownership: %w", err)
+	}
+
+	if count == 0 {
+		return fmt.Errorf("restaurant does not belong to vendor")
+	}
+
+	return nil
+}
+
+// GetByIDWithOwnershipCheck gets restaurant and verifies vendor ownership
+func (r *restaurantRepository) GetByIDWithOwnershipCheck(restaurantID, vendorID int) (*models.Restaurant, error) {
+	// First verify ownership
+	if err := r.VerifyVendorOwnership(restaurantID, vendorID); err != nil {
+		return nil, err
+	}
+
+	// Then get the restaurant
+	return r.GetByID(restaurantID)
+}

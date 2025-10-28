@@ -1,0 +1,393 @@
+{
+  "menu_item_example": {
+    "id": "item_custom_pizza_001",
+    "name": "Build Your Own Pizza",
+    "description": "Create your perfect pizza with our fresh ingredients and customizable options",
+    "price": 12.99,
+    "display_order": 1,
+    "is_active": true,
+    "is_available": true,
+    "image_url": "https://example.com/images/custom-pizza.jpg",
+    "preparation_time_minutes": 25,
+    "calories": 850,
+
+    "dietary_flags": {
+      "vegetarian": false,
+      "vegan": false,
+      "gluten_free": false,
+      "dairy_free": false,
+      "nut_free": true,
+      "halal": false,
+      "kosher": false,
+      "organic": false
+    },
+
+    "allergens": [
+      "dairy",
+      "gluten",
+      "wheat"
+    ],
+
+    "tags": [
+      "popular",
+      "customizable",
+      "chef_special"
+    ],
+
+    "spice_level": 1,
+
+    "variants": [
+      {
+        "id": "var_size",
+        "name": "Size",
+        "type": "single_choice",
+        "required": true,
+        "options": [
+          {
+            "id": "small",
+            "name": "Small (10\")",
+            "price_modifier": -2.00,
+            "description": "Perfect for one person"
+          },
+          {
+            "id": "medium",
+            "name": "Medium (12\")",
+            "price_modifier": 0.00,
+            "description": "Great for sharing"
+          },
+          {
+            "id": "large",
+            "name": "Large (14\")",
+            "price_modifier": 4.00,
+            "description": "Family size"
+          },
+          {
+            "id": "xlarge",
+            "name": "X-Large (16\")",
+            "price_modifier": 7.00,
+            "description": "Party size"
+          }
+        ]
+      },
+      {
+        "id": "var_crust",
+        "name": "Crust Type",
+        "type": "button_group",
+        "required": true,
+        "options": [
+          {
+            "id": "thin",
+            "name": "Thin Crust",
+            "price_modifier": 0.00
+          },
+          {
+            "id": "regular",
+            "name": "Regular",
+            "price_modifier": 0.00
+          },
+          {
+            "id": "thick",
+            "name": "Thick Crust",
+            "price_modifier": 1.50
+          },
+          {
+            "id": "stuffed",
+            "name": "Stuffed Crust",
+            "price_modifier": 3.00
+          },
+          {
+            "id": "gluten_free",
+            "name": "Gluten-Free",
+            "price_modifier": 4.00
+          }
+        ]
+      }
+    ],
+
+    "customization_options": [
+      {
+        "id": "custom_cheese",
+        "name": "Cheese",
+        "type": "single_choice",
+        "required": false,
+        "choices": [
+          {
+            "id": "light",
+            "name": "Light Cheese",
+            "price_modifier": 0.00
+          },
+          {
+            "id": "regular",
+            "name": "Regular Cheese",
+            "price_modifier": 0.00
+          },
+          {
+            "id": "extra",
+            "name": "Extra Cheese",
+            "price_modifier": 2.50
+          },
+          {
+            "id": "no_cheese",
+            "name": "No Cheese (Vegan)",
+            "price_modifier": 0.00
+          }
+        ]
+      },
+      {
+        "id": "custom_toppings",
+        "name": "Premium Toppings",
+        "type": "multiple_choice",
+        "required": false,
+        "max_selections": 5,
+        "choices": [
+          {
+            "id": "pepperoni",
+            "name": "Pepperoni",
+            "price_modifier": 1.50
+          },
+          {
+            "id": "italian_sausage",
+            "name": "Italian Sausage",
+            "price_modifier": 1.50
+          },
+          {
+            "id": "bacon",
+            "name": "Bacon",
+            "price_modifier": 1.75
+          },
+          {
+            "id": "grilled_chicken",
+            "name": "Grilled Chicken",
+            "price_modifier": 2.00
+          },
+          {
+            "id": "anchovies",
+            "name": "Anchovies",
+            "price_modifier": 2.50
+          }
+        ]
+      },
+      {
+        "id": "custom_veggies",
+        "name": "Vegetables (Free)",
+        "type": "multiple_choice",
+        "required": false,
+        "max_selections": null,
+        "choices": [
+          {
+            "id": "mushrooms",
+            "name": "Mushrooms",
+            "price_modifier": 0.00
+          },
+          {
+            "id": "onions",
+            "name": "Onions",
+            "price_modifier": 0.00
+          },
+          {
+            "id": "green_peppers",
+            "name": "Green Peppers",
+            "price_modifier": 0.00
+          },
+          {
+            "id": "black_olives",
+            "name": "Black Olives",
+            "price_modifier": 0.00
+          },
+          {
+            "id": "tomatoes",
+            "name": "Fresh Tomatoes",
+            "price_modifier": 0.00
+          },
+          {
+            "id": "jalapeños",
+            "name": "Jalapeños",
+            "price_modifier": 0.00
+          },
+          {
+            "id": "pineapple",
+            "name": "Pineapple",
+            "price_modifier": 0.00
+          },
+          {
+            "id": "spinach",
+            "name": "Fresh Spinach",
+            "price_modifier": 0.00
+          }
+        ]
+      },
+      {
+        "id": "custom_sauce",
+        "name": "Sauce",
+        "type": "single_choice",
+        "required": true,
+        "choices": [
+          {
+            "id": "marinara",
+            "name": "Classic Marinara",
+            "price_modifier": 0.00
+          },
+          {
+            "id": "white",
+            "name": "White Sauce",
+            "price_modifier": 0.50
+          },
+          {
+            "id": "bbq",
+            "name": "BBQ Sauce",
+            "price_modifier": 0.50
+          },
+          {
+            "id": "pesto",
+            "name": "Pesto",
+            "price_modifier": 1.00
+          },
+          {
+            "id": "buffalo",
+            "name": "Buffalo Sauce",
+            "price_modifier": 0.75
+          }
+        ]
+      },
+      {
+        "id": "custom_spice",
+        "name": "Spice Level",
+        "type": "spice_level",
+        "required": false,
+        "choices": [
+          {
+            "id": "mild",
+            "name": "🌶️ Mild",
+            "price_modifier": 0.00
+          },
+          {
+            "id": "medium",
+            "name": "🌶️🌶️ Medium",
+            "price_modifier": 0.00
+          },
+          {
+            "id": "hot",
+            "name": "🌶️🌶️🌶️ Hot",
+            "price_modifier": 0.00
+          },
+          {
+            "id": "extra_hot",
+            "name": "🌶️🌶️🌶️🌶️ Extra Hot",
+            "price_modifier": 0.50
+          }
+        ]
+      },
+      {
+        "id": "custom_notes",
+        "name": "Special Instructions",
+        "type": "text_input",
+        "required": false,
+        "max_length": 200,
+        "placeholder": "Any special requests? (e.g., well-done, cut in squares)"
+      }
+    ]
+  },
+
+  "menu_example_complete": {
+    "id": "menu_001",
+    "name": "Pizza Palace Main Menu",
+    "description": "Our complete menu featuring customizable pizzas and more",
+    "menu_config": {
+      "version": "1.0",
+      "categories": [
+        {
+          "id": "cat_pizzas",
+          "name": "Custom Pizzas",
+          "description": "Build your perfect pizza",
+          "display_order": 0,
+          "is_active": true,
+          "items": [
+            {
+              "id": "item_custom_pizza_001",
+              "name": "Build Your Own Pizza",
+              "description": "Create your perfect pizza with our fresh ingredients",
+              "price": 12.99,
+              "variants": "... (see menu_item_example above for full structure)"
+            }
+          ]
+        },
+        {
+          "id": "cat_specialty",
+          "name": "Specialty Pizzas",
+          "description": "Chef's signature creations",
+          "display_order": 1,
+          "is_active": true,
+          "items": [
+            {
+              "id": "item_margherita",
+              "name": "Classic Margherita",
+              "description": "Fresh mozzarella, basil, and tomato sauce",
+              "price": 14.99,
+              "image_url": "https://example.com/images/margherita.jpg",
+              "dietary_flags": {
+                "vegetarian": true
+              },
+              "allergens": ["dairy", "gluten"],
+              "tags": ["popular", "vegetarian"],
+              "variants": [
+                {
+                  "id": "var_size",
+                  "name": "Size",
+                  "type": "single_choice",
+                  "required": true,
+                  "options": [
+                    {"id": "medium", "name": "Medium (12\")", "price_modifier": 0.00},
+                    {"id": "large", "name": "Large (14\")", "price_modifier": 4.00}
+                  ]
+                }
+              ],
+              "customization_options": [
+                {
+                  "id": "custom_notes",
+                  "name": "Special Instructions",
+                  "type": "text_input",
+                  "required": false,
+                  "max_length": 200,
+                  "placeholder": "Any special requests?"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "is_active": true,
+    "created_at": "2025-01-15T10:00:00Z",
+    "updated_at": "2025-01-15T10:00:00Z"
+  },
+
+  "price_calculation_example": {
+    "description": "How to calculate the final price with variants and customizations",
+    "base_price": 12.99,
+    "selected_variants": {
+      "var_size": "large",
+      "var_crust": "stuffed"
+    },
+    "selected_customizations": {
+      "custom_cheese": "extra",
+      "custom_toppings": ["pepperoni", "grilled_chicken", "bacon"],
+      "custom_veggies": ["mushrooms", "onions", "jalapeños"],
+      "custom_sauce": "pesto",
+      "custom_spice": "extra_hot",
+      "custom_notes": "Please cut in 8 slices"
+    },
+    "calculation": {
+      "base": 12.99,
+      "large_pizza": 4.00,
+      "stuffed_crust": 3.00,
+      "extra_cheese": 2.50,
+      "pepperoni": 1.50,
+      "grilled_chicken": 2.00,
+      "bacon": 1.75,
+      "veggies": 0.00,
+      "pesto_sauce": 1.00,
+      "extra_hot": 0.50,
+      "total": 29.24
+    }
+  }
+}

@@ -1,0 +1,101 @@
+LoginRequest:
+  type: object
+  required:
+    - username
+    - password
+  properties:
+    username:
+      type: string
+      example: customer1
+    password:
+      type: string
+      format: password
+      example: password123
+
+LoginResponse:
+  type: object
+  properties:
+    success:
+      type: boolean
+      example: true
+    message:
+      type: string
+      example: Login successful
+    token:
+      type: string
+      example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+    user:
+      $ref: './user.yaml#/User'
+    profile:
+      oneOf:
+        - $ref: './user.yaml#/Customer'
+        - $ref: './user.yaml#/Vendor'
+        - $ref: './user.yaml#/Driver'
+        - $ref: './user.yaml#/Admin'
+
+SignupRequest:
+  type: object
+  required:
+    - username
+    - email
+    - password
+    - user_type
+    - full_name
+  properties:
+    username:
+      type: string
+      minLength: 3
+      maxLength: 50
+      example: newuser
+    email:
+      type: string
+      format: email
+      example: newuser@example.com
+    password:
+      type: string
+      format: password
+      minLength: 6
+      example: password123
+    user_type:
+      type: string
+      enum: [customer, vendor, driver, admin]
+      example: customer
+    full_name:
+      type: string
+      example: John Doe
+    phone:
+      type: string
+      example: "+1234567890"
+    business_name:
+      type: string
+      description: Required for vendor registration
+      example: Joe's Pizza
+    description:
+      type: string
+      description: Optional for vendor registration
+      example: Best pizza in town
+    vehicle_type:
+      type: string
+      description: Optional for driver registration
+      example: Car
+    vehicle_plate:
+      type: string
+      description: Optional for driver registration
+      example: ABC-123
+    license_number:
+      type: string
+      description: Optional for driver registration
+      example: D1234567
+
+SignupResponse:
+  type: object
+  properties:
+    success:
+      type: boolean
+      example: true
+    message:
+      type: string
+      example: User registered successfully
+    user_id:
+      type: integer
+      example: 5

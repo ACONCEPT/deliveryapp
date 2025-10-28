@@ -1,0 +1,165 @@
+ApprovalStatus:
+  type: string
+  enum:
+    - pending
+    - approved
+    - rejected
+  description: Approval status of an entity (vendor or restaurant)
+  example: pending
+
+ApprovalHistory:
+  type: object
+  properties:
+    id:
+      type: integer
+      description: Unique approval history entry ID
+      example: 1
+    entity_type:
+      type: string
+      enum:
+        - vendor
+        - restaurant
+      description: Type of entity being approved/rejected
+      example: vendor
+    entity_id:
+      type: integer
+      description: ID of the entity (vendor_id or restaurant_id)
+      example: 5
+    admin_id:
+      type: integer
+      description: ID of the admin who performed the action
+      example: 1
+    action:
+      $ref: '#/ApprovalStatus'
+    reason:
+      type: string
+      nullable: true
+      description: Reason for rejection (null for approvals)
+      example: Business license verification failed
+    created_at:
+      type: string
+      format: date-time
+      description: Timestamp of the approval/rejection action
+      example: "2024-01-15T10:30:00Z"
+
+VendorWithApproval:
+  allOf:
+    - $ref: './user.yaml#/Vendor'
+    - type: object
+      properties:
+        approval_status:
+          $ref: '#/ApprovalStatus'
+        approved_by_admin_id:
+          type: integer
+          nullable: true
+          description: ID of admin who approved the vendor
+          example: 1
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when vendor was approved
+          example: "2024-01-15T10:30:00Z"
+        rejection_reason:
+          type: string
+          nullable: true
+          description: Reason for rejection if vendor was rejected
+          example: Invalid business license
+        approved_by_admin_name:
+          type: string
+          nullable: true
+          description: Name of admin who approved the vendor
+          example: Admin User
+
+RestaurantWithApproval:
+  allOf:
+    - $ref: './restaurant.yaml#/Restaurant'
+    - type: object
+      properties:
+        approval_status:
+          $ref: '#/ApprovalStatus'
+        approved_by_admin_id:
+          type: integer
+          nullable: true
+          description: ID of admin who approved the restaurant
+          example: 1
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when restaurant was approved
+          example: "2024-01-15T10:30:00Z"
+        rejection_reason:
+          type: string
+          nullable: true
+          description: Reason for rejection if restaurant was rejected
+          example: Failed health inspection
+        approved_by_admin_name:
+          type: string
+          nullable: true
+          description: Name of admin who approved the restaurant
+          example: Admin User
+
+ApprovalActionRequest:
+  type: object
+  properties:
+    reason:
+      type: string
+      nullable: true
+      description: Reason for rejection (required for rejection, optional for approval)
+      example: Business documentation incomplete
+  example:
+    reason: Business license verification failed
+
+ApprovalDashboardResponse:
+  type: object
+  properties:
+    pending_vendors:
+      type: integer
+      description: Number of vendors awaiting approval
+      example: 5
+    pending_restaurants:
+      type: integer
+      description: Number of restaurants awaiting approval
+      example: 8
+    approved_vendors:
+      type: integer
+      description: Total number of approved vendors
+      example: 42
+    approved_restaurants:
+      type: integer
+      description: Total number of approved restaurants
+      example: 67
+    rejected_vendors:
+      type: integer
+      description: Total number of rejected vendors
+      example: 3
+    rejected_restaurants:
+      type: integer
+      description: Total number of rejected restaurants
+      example: 2
+
+VendorApprovalStatusResponse:
+  type: object
+  properties:
+    vendor_id:
+      type: integer
+      description: Vendor ID
+      example: 5
+    approval_status:
+      $ref: '#/ApprovalStatus'
+    rejection_reason:
+      type: string
+      nullable: true
+      description: Reason for rejection if applicable
+      example: Invalid business documentation
+    approved_at:
+      type: string
+      format: date-time
+      nullable: true
+      description: Timestamp when approved
+      example: "2024-01-15T10:30:00Z"
+    can_create_restaurants:
+      type: boolean
+      description: Whether vendor is allowed to create restaurants (true if approved)
+      example: true

@@ -1,0 +1,18 @@
+ErrorResponse:
+  type: object
+  properties:
+    success:
+      type: boolean
+      example: false
+    message:
+      type: string
+      example: Error message describing what went wrong
+    error_type:
+      type: string
+      description: Classification of the error (only present for authentication errors)
+      enum:
+        - SIGNATURE_MISMATCH
+        - TOKEN_EXPIRED
+        - MALFORMED_TOKEN
+        - VALIDATION_ERROR
+      example: TOKEN_EXPIRED

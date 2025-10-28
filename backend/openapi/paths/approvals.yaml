@@ -1,0 +1,577 @@
+/api/admin/approvals/vendors:
+  get:
+    summary: Get pending vendors
+    description: Retrieve all vendors awaiting approval (admin only)
+    tags:
+      - Approval Management
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Pending vendors retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Pending vendors retrieved successfully
+                data:
+                  type: array
+                  items:
+                    $ref: '../schemas/approval.yaml#/VendorWithApproval'
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '403':
+        description: Admin access required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '500':
+        description: Failed to retrieve pending vendors
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+
+/api/admin/approvals/restaurants:
+  get:
+    summary: Get pending restaurants
+    description: Retrieve all restaurants awaiting approval (admin only)
+    tags:
+      - Approval Management
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Pending restaurants retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Pending restaurants retrieved successfully
+                data:
+                  type: array
+                  items:
+                    $ref: '../schemas/approval.yaml#/RestaurantWithApproval'
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '403':
+        description: Admin access required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '500':
+        description: Failed to retrieve pending restaurants
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+
+/api/admin/approvals/dashboard:
+  get:
+    summary: Get approval dashboard statistics
+    description: Retrieve summary counts of pending, approved, and rejected vendors and restaurants (admin only)
+    tags:
+      - Approval Management
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Approval statistics retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Approval statistics retrieved successfully
+                data:
+                  $ref: '../schemas/approval.yaml#/ApprovalDashboardResponse'
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '403':
+        description: Admin access required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '500':
+        description: Failed to retrieve approval statistics
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+
+/api/admin/vendors/{id}/approve:
+  put:
+    summary: Approve vendor
+    description: Approve a vendor account, allowing them to create restaurants (admin only)
+    tags:
+      - Approval Management
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        description: Vendor ID
+        required: true
+        schema:
+          type: integer
+          example: 5
+    responses:
+      '200':
+        description: Vendor approved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Vendor approved successfully
+                data:
+                  type: object
+                  nullable: true
+                  example: null
+      '400':
+        description: Invalid vendor ID or vendor already approved
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            examples:
+              invalid_id:
+                value:
+                  success: false
+                  message: Invalid vendor ID
+              already_approved:
+                value:
+                  success: false
+                  message: Vendor is already approved
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '403':
+        description: Admin access required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '404':
+        description: Vendor not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '500':
+        description: Failed to approve vendor
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+
+/api/admin/vendors/{id}/reject:
+  put:
+    summary: Reject vendor
+    description: Reject a vendor account with a reason (admin only)
+    tags:
+      - Approval Management
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        description: Vendor ID
+        required: true
+        schema:
+          type: integer
+          example: 5
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/approval.yaml#/ApprovalActionRequest'
+          example:
+            reason: Business license verification failed
+    responses:
+      '200':
+        description: Vendor rejected successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Vendor rejected successfully
+                data:
+                  type: object
+                  nullable: true
+                  example: null
+      '400':
+        description: Invalid request or vendor already rejected
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            examples:
+              invalid_id:
+                value:
+                  success: false
+                  message: Invalid vendor ID
+              missing_reason:
+                value:
+                  success: false
+                  message: Rejection reason is required
+              already_rejected:
+                value:
+                  success: false
+                  message: Vendor is already rejected
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '403':
+        description: Admin access required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '404':
+        description: Vendor not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '500':
+        description: Failed to reject vendor
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+
+/api/admin/restaurants/{id}/approve:
+  put:
+    summary: Approve restaurant
+    description: Approve a restaurant, making it visible to customers (admin only)
+    tags:
+      - Approval Management
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        description: Restaurant ID
+        required: true
+        schema:
+          type: integer
+          example: 10
+    responses:
+      '200':
+        description: Restaurant approved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Restaurant approved successfully
+                data:
+                  type: object
+                  nullable: true
+                  example: null
+      '400':
+        description: Invalid restaurant ID or restaurant already approved
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            examples:
+              invalid_id:
+                value:
+                  success: false
+                  message: Invalid restaurant ID
+              already_approved:
+                value:
+                  success: false
+                  message: Restaurant is already approved
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '403':
+        description: Admin access required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '404':
+        description: Restaurant not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '500':
+        description: Failed to approve restaurant
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+
+/api/admin/restaurants/{id}/reject:
+  put:
+    summary: Reject restaurant
+    description: Reject a restaurant with a reason (admin only)
+    tags:
+      - Approval Management
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        description: Restaurant ID
+        required: true
+        schema:
+          type: integer
+          example: 10
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/approval.yaml#/ApprovalActionRequest'
+          example:
+            reason: Failed health inspection requirements
+    responses:
+      '200':
+        description: Restaurant rejected successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Restaurant rejected successfully
+                data:
+                  type: object
+                  nullable: true
+                  example: null
+      '400':
+        description: Invalid request or restaurant already rejected
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            examples:
+              invalid_id:
+                value:
+                  success: false
+                  message: Invalid restaurant ID
+              missing_reason:
+                value:
+                  success: false
+                  message: Rejection reason is required
+              already_rejected:
+                value:
+                  success: false
+                  message: Restaurant is already rejected
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '403':
+        description: Admin access required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '404':
+        description: Restaurant not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '500':
+        description: Failed to reject restaurant
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+
+/api/admin/approvals/history:
+  get:
+    summary: Get approval history
+    description: Retrieve approval/rejection history for a specific entity (admin only)
+    tags:
+      - Approval Management
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: entity_type
+        in: query
+        description: Type of entity (vendor or restaurant)
+        required: true
+        schema:
+          type: string
+          enum:
+            - vendor
+            - restaurant
+          example: vendor
+      - name: entity_id
+        in: query
+        description: ID of the entity
+        required: true
+        schema:
+          type: integer
+          example: 5
+    responses:
+      '200':
+        description: Approval history retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Approval history retrieved successfully
+                data:
+                  type: array
+                  items:
+                    $ref: '../schemas/approval.yaml#/ApprovalHistory'
+      '400':
+        description: Invalid or missing parameters
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            examples:
+              missing_params:
+                value:
+                  success: false
+                  message: entity_type and entity_id are required
+              invalid_entity_type:
+                value:
+                  success: false
+                  message: entity_type must be 'vendor' or 'restaurant'
+              invalid_id:
+                value:
+                  success: false
+                  message: Invalid entity_id
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '403':
+        description: Admin access required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '500':
+        description: Failed to retrieve approval history
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+
+/api/vendor/approval-status:
+  get:
+    summary: Get vendor approval status
+    description: Retrieve approval status for the authenticated vendor
+    tags:
+      - Approval Management
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Vendor approval status retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Vendor approval status retrieved successfully
+                data:
+                  $ref: '../schemas/approval.yaml#/VendorApprovalStatusResponse'
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '403':
+        description: Vendor access required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '404':
+        description: Vendor profile not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'

@@ -1,0 +1,310 @@
+openapi: 3.0.3
+info:
+  title: Delivery App API
+  description: |
+    REST API for a multi-user delivery application supporting customers, vendors, drivers, and admins.
+
+    ## Authentication
+    Most endpoints require JWT authentication. Include the token in the Authorization header:
+    ```
+    Authorization: Bearer <token>
+    ```
+
+    ## User Types
+    - **customer**: End users who place orders
+    - **vendor**: Restaurant/business owners
+    - **driver**: Delivery personnel
+    - **admin**: System administrators
+  version: 1.0.0
+  contact:
+    name: Delivery App API Support
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+tags:
+  - name: Authentication
+    description: User authentication and registration
+  - name: Profile
+    description: User profile operations
+  - name: Addresses
+    description: Customer address management
+  - name: Restaurants
+    description: Restaurant management and browsing
+  - name: Vendor-Restaurants
+    description: Vendor-restaurant ownership relationships
+  - name: Menus
+    description: Menu management for vendors and viewing for customers
+  - name: Customer Orders
+    description: Customer order creation and management
+  - name: Vendor Orders
+    description: Vendor order viewing and status management
+  - name: Driver Orders
+    description: Driver order assignment and delivery management
+  - name: Admin Orders
+    description: Admin order oversight, statistics, and export
+  - name: System Settings
+    description: System configuration management (admin only)
+  - name: Approval Management
+    description: Vendor and restaurant approval/rejection management (admin only)
+  - name: Health
+    description: Service health check
+
+paths:
+  # Health
+  /health:
+    $ref: './openapi/paths/health.yaml#/~1health'
+
+  # Authentication
+  /api/login:
+    $ref: './openapi/paths/auth.yaml#/~1api~1login'
+  /api/signup:
+    $ref: './openapi/paths/auth.yaml#/~1api~1signup'
+  /api/debug/token-info:
+    $ref: './openapi/paths/auth.yaml#/~1api~1debug~1token-info'
+
+  # Profile
+  /api/profile:
+    $ref: './openapi/paths/profile.yaml#/~1api~1profile'
+
+  # Addresses
+  /api/addresses:
+    $ref: './openapi/paths/addresses.yaml#/~1api~1addresses'
+  /api/addresses/{id}:
+    $ref: './openapi/paths/addresses.yaml#/~1api~1addresses~1{id}'
+  /api/customer/addresses:
+    $ref: './openapi/paths/addresses.yaml#/~1api~1customer~1addresses'
+  /api/customer/addresses/{id}:
+    $ref: './openapi/paths/addresses.yaml#/~1api~1customer~1addresses~1{id}'
+  /api/customer/addresses/{id}/set-default:
+    $ref: './openapi/paths/addresses.yaml#/~1api~1customer~1addresses~1{id}~1set-default'
+
+  # Restaurants
+  /api/restaurants:
+    $ref: './openapi/paths/restaurants.yaml#/~1api~1restaurants'
+  /api/restaurants/{id}:
+    $ref: './openapi/paths/restaurants.yaml#/~1api~1restaurants~1{id}'
+  /api/restaurants/{restaurant_id}/owner:
+    $ref: './openapi/paths/restaurants.yaml#/~1api~1restaurants~1{restaurant_id}~1owner'
+  /api/vendor/restaurants:
+    $ref: './openapi/paths/restaurants.yaml#/~1api~1vendor~1restaurants'
+  /api/vendor/restaurants/{id}:
+    $ref: './openapi/paths/restaurants.yaml#/~1api~1vendor~1restaurants~1{id}'
+  /api/admin/vendor-restaurants:
+    $ref: './openapi/paths/restaurants.yaml#/~1api~1admin~1vendor-restaurants'
+  /api/admin/vendor-restaurants/{id}:
+    $ref: './openapi/paths/restaurants.yaml#/~1api~1admin~1vendor-restaurants~1{id}'
+  /api/admin/restaurants/{restaurant_id}/transfer:
+    $ref: './openapi/paths/restaurants.yaml#/~1api~1admin~1restaurants~1{restaurant_id}~1transfer'
+
+  # Menus
+  /api/vendor/menus:
+    $ref: './openapi/paths/menus.yaml#/~1api~1vendor~1menus'
+  /api/vendor/menus/{id}:
+    $ref: './openapi/paths/menus.yaml#/~1api~1vendor~1menus~1{id}'
+  /api/vendor/restaurants/{restaurant_id}/menus/{menu_id}:
+    $ref: './openapi/paths/menus.yaml#/~1api~1vendor~1restaurants~1{restaurant_id}~1menus~1{menu_id}'
+  /api/vendor/restaurants/{restaurant_id}/active-menu:
+    $ref: './openapi/paths/menus.yaml#/~1api~1vendor~1restaurants~1{restaurant_id}~1active-menu'
+  /api/restaurants/{restaurant_id}/menu:
+    $ref: './openapi/paths/menus.yaml#/~1api~1restaurants~1{restaurant_id}~1menu'
+  /api/admin/menus:
+    $ref: './openapi/paths/menus.yaml#/~1api~1admin~1menus'
+
+  # Orders
+  /api/customer/orders:
+    $ref: './openapi/paths/orders.yaml#/~1api~1customer~1orders'
+  /api/customer/orders/{id}:
+    $ref: './openapi/paths/orders.yaml#/~1api~1customer~1orders~1{id}'
+  /api/vendor/orders:
+    $ref: './openapi/paths/orders.yaml#/~1api~1vendor~1orders'
+  /api/vendor/orders/stats:
+    $ref: './openapi/paths/orders.yaml#/~1api~1vendor~1orders~1stats'
+  /api/vendor/orders/{id}:
+    $ref: './openapi/paths/orders.yaml#/~1api~1vendor~1orders~1{id}'
+  /api/driver/orders/available:
+    $ref: './openapi/paths/orders.yaml#/~1api~1driver~1orders~1available'
+  /api/driver/orders:
+    $ref: './openapi/paths/orders.yaml#/~1api~1driver~1orders'
+  /api/driver/orders/{id}:
+    $ref: './openapi/paths/orders.yaml#/~1api~1driver~1orders~1{id}'
+  /api/driver/orders/{id}/assign:
+    $ref: './openapi/paths/orders.yaml#/~1api~1driver~1orders~1{id}~1assign'
+  /api/driver/orders/{id}/status:
+    $ref: './openapi/paths/orders.yaml#/~1api~1driver~1orders~1{id}~1status'
+  /api/admin/orders:
+    $ref: './openapi/paths/orders.yaml#/~1api~1admin~1orders'
+  /api/admin/orders/{id}:
+    $ref: './openapi/paths/orders.yaml#/~1api~1admin~1orders~1{id}'
+  /api/admin/orders/stats:
+    $ref: './openapi/paths/orders.yaml#/~1api~1admin~1orders~1stats'
+  /api/admin/orders/export:
+    $ref: './openapi/paths/orders.yaml#/~1api~1admin~1orders~1export'
+
+  # Settings
+  /api/admin/settings:
+    $ref: './openapi/paths/settings.yaml#/~1api~1admin~1settings'
+  /api/admin/settings/categories:
+    $ref: './openapi/paths/settings.yaml#/~1api~1admin~1settings~1categories'
+  /api/admin/settings/{key}:
+    $ref: './openapi/paths/settings.yaml#/~1api~1admin~1settings~1{key}'
+
+  # Approvals
+  /api/admin/approvals/vendors:
+    $ref: './openapi/paths/approvals.yaml#/~1api~1admin~1approvals~1vendors'
+  /api/admin/approvals/restaurants:
+    $ref: './openapi/paths/approvals.yaml#/~1api~1admin~1approvals~1restaurants'
+  /api/admin/approvals/dashboard:
+    $ref: './openapi/paths/approvals.yaml#/~1api~1admin~1approvals~1dashboard'
+  /api/admin/vendors/{id}/approve:
+    $ref: './openapi/paths/approvals.yaml#/~1api~1admin~1vendors~1{id}~1approve'
+  /api/admin/vendors/{id}/reject:
+    $ref: './openapi/paths/approvals.yaml#/~1api~1admin~1vendors~1{id}~1reject'
+  /api/admin/restaurants/{id}/approve:
+    $ref: './openapi/paths/approvals.yaml#/~1api~1admin~1restaurants~1{id}~1approve'
+  /api/admin/restaurants/{id}/reject:
+    $ref: './openapi/paths/approvals.yaml#/~1api~1admin~1restaurants~1{id}~1reject'
+  /api/admin/approvals/history:
+    $ref: './openapi/paths/approvals.yaml#/~1api~1admin~1approvals~1history'
+  /api/vendor/approval-status:
+    $ref: './openapi/paths/approvals.yaml#/~1api~1vendor~1approval-status'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/login
+
+  schemas:
+    # Authentication schemas
+    LoginRequest:
+      $ref: './openapi/schemas/auth.yaml#/LoginRequest'
+    LoginResponse:
+      $ref: './openapi/schemas/auth.yaml#/LoginResponse'
+    SignupRequest:
+      $ref: './openapi/schemas/auth.yaml#/SignupRequest'
+    SignupResponse:
+      $ref: './openapi/schemas/auth.yaml#/SignupResponse'
+
+    # User schemas
+    User:
+      $ref: './openapi/schemas/user.yaml#/User'
+    Customer:
+      $ref: './openapi/schemas/user.yaml#/Customer'
+    Vendor:
+      $ref: './openapi/schemas/user.yaml#/Vendor'
+    Driver:
+      $ref: './openapi/schemas/user.yaml#/Driver'
+    Admin:
+      $ref: './openapi/schemas/user.yaml#/Admin'
+    ProfileResponse:
+      $ref: './openapi/schemas/user.yaml#/ProfileResponse'
+
+    # Address schemas
+    CustomerAddress:
+      $ref: './openapi/schemas/address.yaml#/CustomerAddress'
+    CreateAddressRequest:
+      $ref: './openapi/schemas/address.yaml#/CreateAddressRequest'
+    UpdateAddressRequest:
+      $ref: './openapi/schemas/address.yaml#/UpdateAddressRequest'
+
+    # Restaurant schemas
+    Restaurant:
+      $ref: './openapi/schemas/restaurant.yaml#/Restaurant'
+    VendorRestaurant:
+      $ref: './openapi/schemas/restaurant.yaml#/VendorRestaurant'
+    CreateRestaurantRequest:
+      $ref: './openapi/schemas/restaurant.yaml#/CreateRestaurantRequest'
+    UpdateRestaurantRequest:
+      $ref: './openapi/schemas/restaurant.yaml#/UpdateRestaurantRequest'
+
+    # Menu schemas
+    Menu:
+      $ref: './openapi/schemas/menu.yaml#/Menu'
+    MenuWithRestaurants:
+      $ref: './openapi/schemas/menu.yaml#/MenuWithRestaurants'
+    RestaurantMenuAssignment:
+      $ref: './openapi/schemas/menu.yaml#/RestaurantMenuAssignment'
+    RestaurantMenu:
+      $ref: './openapi/schemas/menu.yaml#/RestaurantMenu'
+    CreateMenuRequest:
+      $ref: './openapi/schemas/menu.yaml#/CreateMenuRequest'
+    UpdateMenuRequest:
+      $ref: './openapi/schemas/menu.yaml#/UpdateMenuRequest'
+    AssignMenuRequest:
+      $ref: './openapi/schemas/menu.yaml#/AssignMenuRequest'
+    SetActiveMenuRequest:
+      $ref: './openapi/schemas/menu.yaml#/SetActiveMenuRequest'
+
+    # Order schemas
+    OrderStatus:
+      $ref: './openapi/schemas/order.yaml#/OrderStatus'
+    Order:
+      $ref: './openapi/schemas/order.yaml#/Order'
+    OrderItem:
+      $ref: './openapi/schemas/order.yaml#/OrderItem'
+    OrderStatusHistory:
+      $ref: './openapi/schemas/order.yaml#/OrderStatusHistory'
+    CreateOrderRequest:
+      $ref: './openapi/schemas/order.yaml#/CreateOrderRequest'
+    CreateOrderItemRequest:
+      $ref: './openapi/schemas/order.yaml#/CreateOrderItemRequest'
+    UpdateOrderStatusRequest:
+      $ref: './openapi/schemas/order.yaml#/UpdateOrderStatusRequest'
+    CancelOrderRequest:
+      $ref: './openapi/schemas/order.yaml#/CancelOrderRequest'
+    OrderDetailsResponse:
+      $ref: './openapi/schemas/order.yaml#/OrderDetailsResponse'
+    OrderListResponse:
+      $ref: './openapi/schemas/order.yaml#/OrderListResponse'
+    OrderSummary:
+      $ref: './openapi/schemas/order.yaml#/OrderSummary'
+    OrderStats:
+      $ref: './openapi/schemas/order.yaml#/OrderStats'
+    RestaurantInfo:
+      $ref: './openapi/schemas/order.yaml#/RestaurantInfo'
+    CustomerInfo:
+      $ref: './openapi/schemas/order.yaml#/CustomerInfo'
+    DriverInfo:
+      $ref: './openapi/schemas/order.yaml#/DriverInfo'
+
+    # Settings schemas
+    SystemSetting:
+      $ref: './openapi/schemas/settings.yaml#/SystemSetting'
+    SettingsByCategory:
+      $ref: './openapi/schemas/settings.yaml#/SettingsByCategory'
+    SettingsResponse:
+      $ref: './openapi/schemas/settings.yaml#/SettingsResponse'
+    UpdateSettingRequest:
+      $ref: './openapi/schemas/settings.yaml#/UpdateSettingRequest'
+    BatchUpdateSettingRequest:
+      $ref: './openapi/schemas/settings.yaml#/BatchUpdateSettingRequest'
+    UpdateMultipleSettingsRequest:
+      $ref: './openapi/schemas/settings.yaml#/UpdateMultipleSettingsRequest'
+    BatchUpdateResult:
+      $ref: './openapi/schemas/settings.yaml#/BatchUpdateResult'
+    CategoriesResponse:
+      $ref: './openapi/schemas/settings.yaml#/CategoriesResponse'
+
+    # Approval schemas
+    ApprovalStatus:
+      $ref: './openapi/schemas/approval.yaml#/ApprovalStatus'
+    ApprovalHistory:
+      $ref: './openapi/schemas/approval.yaml#/ApprovalHistory'
+    VendorWithApproval:
+      $ref: './openapi/schemas/approval.yaml#/VendorWithApproval'
+    RestaurantWithApproval:
+      $ref: './openapi/schemas/approval.yaml#/RestaurantWithApproval'
+    ApprovalActionRequest:
+      $ref: './openapi/schemas/approval.yaml#/ApprovalActionRequest'
+    ApprovalDashboardResponse:
+      $ref: './openapi/schemas/approval.yaml#/ApprovalDashboardResponse'
+    VendorApprovalStatusResponse:
+      $ref: './openapi/schemas/approval.yaml#/VendorApprovalStatusResponse'
+
+    # Common schemas
+    ErrorResponse:
+      $ref: './openapi/schemas/common.yaml#/ErrorResponse'

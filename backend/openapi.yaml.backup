@@ -1,0 +1,4681 @@
+openapi: 3.0.3
+info:
+  title: Delivery App API
+  description: |
+    REST API for a multi-user delivery application supporting customers, vendors, drivers, and admins.
+
+    ## Authentication
+    Most endpoints require JWT authentication. Include the token in the Authorization header:
+    ```
+    Authorization: Bearer <token>
+    ```
+
+    ## User Types
+    - **customer**: End users who place orders
+    - **vendor**: Restaurant/business owners
+    - **driver**: Delivery personnel
+    - **admin**: System administrators
+  version: 1.0.0
+  contact:
+    name: Delivery App API Support
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+tags:
+  - name: Authentication
+    description: User authentication and registration
+  - name: Profile
+    description: User profile operations
+  - name: Addresses
+    description: Customer address management
+  - name: Restaurants
+    description: Restaurant management and browsing
+  - name: Vendor-Restaurants
+    description: Vendor-restaurant ownership relationships
+  - name: Menus
+    description: Menu management for vendors and viewing for customers
+  - name: Customer Orders
+    description: Customer order creation and management
+  - name: Vendor Orders
+    description: Vendor order viewing and status management
+  - name: Driver Orders
+    description: Driver order assignment and delivery management
+  - name: Admin Orders
+    description: Admin order oversight, statistics, and export
+  - name: System Settings
+    description: System configuration management (admin only)
+  - name: Health
+    description: Service health check
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Check if the API service is running
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  service:
+                    type: string
+                    example: delivery_app
+
+  /api/login:
+    post:
+      summary: User login
+      description: Authenticate a user and receive a JWT token
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/signup:
+    post:
+      summary: User registration
+      description: Register a new user account with associated profile
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignupResponse'
+        '400':
+          description: Invalid request body or user type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Username or email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to create user or profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/debug/token-info:
+    get:
+      summary: Debug token information (Development only)
+      description: |
+        Returns detailed information about a JWT token for debugging purposes.
+
+        **⚠️ WARNING:** This endpoint is only available in development mode and should never be enabled in production.
+
+        Useful for debugging JWT signature mismatches, expiration issues, and verifying token claims.
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Token information retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token_preview:
+                    type: string
+                    description: First 30 characters of the token
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6...
+                  token_length:
+                    type: integer
+                    description: Total length of the token in characters
+                    example: 187
+                  secret_length:
+                    type: integer
+                    description: Length of the JWT secret used
+                    example: 36
+                  secret_preview:
+                    type: string
+                    description: First 8 characters of the JWT secret
+                    example: change-t...
+                  claims:
+                    type: object
+                    description: Decoded JWT claims
+                    properties:
+                      user_id:
+                        type: integer
+                        example: 1
+                      username:
+                        type: string
+                        example: customer1
+                      user_type:
+                        type: string
+                        example: customer
+                      issuer:
+                        type: string
+                        example: delivery_app
+                      issued_at:
+                        type: object
+                        description: Token issuance time (NumericDate)
+                      expires_at:
+                        type: object
+                        description: Token expiration time (NumericDate)
+        '400':
+          description: No Authorization header or invalid format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/profile:
+    get:
+      summary: Get user profile
+      description: Retrieve the authenticated user's profile information
+      tags:
+        - Profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/addresses:
+    get:
+      summary: Get customer addresses
+      description: |
+        Retrieve customer addresses. Behavior varies by user type:
+        - **Customers**: Get their own addresses (no query params needed)
+        - **Vendors/Drivers/Admins**: Get addresses for a specific customer (requires `customer_id` query param)
+      tags:
+        - Addresses
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: customer_id
+          in: query
+          description: Customer ID (required for vendors, drivers, and admins)
+          required: false
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Addresses retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  addresses:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CustomerAddress'
+        '400':
+          description: Missing or invalid customer_id parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to retrieve addresses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/addresses/{id}:
+    get:
+      summary: Get specific address
+      description: |
+        Retrieve a specific address by ID. Access rules:
+        - **Customers**: Can only view their own addresses
+        - **Vendors/Drivers/Admins**: Can view any address
+      tags:
+        - Addresses
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Address ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Address retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  address:
+                    $ref: '#/components/schemas/CustomerAddress'
+        '400':
+          description: Invalid address ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied (customer doesn't own this address)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Address not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/customer/addresses:
+    post:
+      summary: Create address
+      description: Create a new address for the authenticated customer
+      tags:
+        - Addresses
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAddressRequest'
+      responses:
+        '201':
+          description: Address created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Address created successfully
+                  address:
+                    $ref: '#/components/schemas/CustomerAddress'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Only customers can create addresses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to create address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/customer/addresses/{id}:
+    put:
+      summary: Update address
+      description: Update an existing address (only the owner can update)
+      tags:
+        - Addresses
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Address ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAddressRequest'
+      responses:
+        '200':
+          description: Address updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Address updated successfully
+                  address:
+                    $ref: '#/components/schemas/CustomerAddress'
+        '400':
+          description: Invalid request body or address ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied (not the owner)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Address not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to update address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete address
+      description: Delete an address (only the owner can delete)
+      tags:
+        - Addresses
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Address ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Address deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Address deleted successfully
+        '400':
+          description: Invalid address ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied (not the owner)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Address not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to delete address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/customer/addresses/{id}/set-default:
+    put:
+      summary: Set default address
+      description: Set an address as the default for the authenticated customer
+      tags:
+        - Addresses
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Address ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Default address updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Default address updated successfully
+        '400':
+          description: Invalid address ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied (not the owner)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Address not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to set default address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/restaurants:
+    get:
+      summary: Get restaurants
+      description: |
+        Retrieve restaurants. Behavior varies by user type:
+        - **Vendors**: Get only their own restaurants
+        - **Admins**: Get all restaurants
+        - **Customers/Drivers**: Get all active restaurants
+      tags:
+        - Restaurants
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Restaurants retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  restaurants:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Restaurant'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to retrieve restaurants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/restaurants/{id}:
+    get:
+      summary: Get specific restaurant
+      description: |
+        Retrieve a specific restaurant by ID. Access rules:
+        - **Vendors**: Can only view their own restaurants
+        - **Customers/Drivers**: Can only view active restaurants
+        - **Admins**: Can view any restaurant
+      tags:
+        - Restaurants
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Restaurant ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Restaurant retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  restaurant:
+                    $ref: '#/components/schemas/Restaurant'
+        '400':
+          description: Invalid restaurant ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Restaurant not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/restaurants/{restaurant_id}/owner:
+    get:
+      summary: Get restaurant owner
+      description: Retrieve the vendor who owns a specific restaurant
+      tags:
+        - Restaurants
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: restaurant_id
+          in: path
+          description: Restaurant ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Restaurant owner retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  vendor_restaurant:
+                    $ref: '#/components/schemas/VendorRestaurant'
+                  vendor:
+                    $ref: '#/components/schemas/Vendor'
+        '400':
+          description: Invalid restaurant ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No vendor found for this restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to retrieve vendor information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/vendor/restaurants:
+    post:
+      summary: Create restaurant
+      description: |
+        Create a new restaurant. Ownership is automatically assigned to the authenticated vendor.
+        The system will:
+        1. Create the restaurant
+        2. Query the vendor table using the authenticated user's ID
+        3. Create a vendor_restaurants relationship linking the vendor to the restaurant
+      tags:
+        - Restaurants
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRestaurantRequest'
+      responses:
+        '201':
+          description: Restaurant created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Restaurant created successfully
+                  restaurant:
+                    $ref: '#/components/schemas/Restaurant'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Only vendors can create restaurants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to create restaurant or assign ownership
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/vendor/restaurants/{id}:
+    put:
+      summary: Update restaurant
+      description: Update an existing restaurant (only the owning vendor or admin can update)
+      tags:
+        - Restaurants
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Restaurant ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRestaurantRequest'
+      responses:
+        '200':
+          description: Restaurant updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Restaurant updated successfully
+                  restaurant:
+                    $ref: '#/components/schemas/Restaurant'
+        '400':
+          description: Invalid request body or restaurant ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied (not the owner)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Restaurant not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to update restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete restaurant
+      description: |
+        Delete a restaurant (only the owning vendor or admin can delete).
+        Cascade delete will automatically remove the vendor_restaurants relationship.
+      tags:
+        - Restaurants
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Restaurant ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Restaurant deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Restaurant deleted successfully
+        '400':
+          description: Invalid restaurant ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied (not the owner)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Restaurant not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to delete restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/vendor/menus:
+    post:
+      summary: Create menu
+      description: Create a new menu (vendor only)
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMenuRequest'
+      responses:
+        '201':
+          description: Menu created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Menu created successfully
+                  menu:
+                    $ref: '#/components/schemas/Menu'
+        '400':
+          description: Invalid request body or menu_config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to create menu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: Get vendor menus
+      description: List all menus for the authenticated vendor with assigned restaurant info
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: restaurant_id
+          in: query
+          description: Filter by specific restaurant
+          required: false
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Menus retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  menus:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MenuWithRestaurants'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to fetch menus
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/vendor/menus/{id}:
+    get:
+      summary: Get menu by ID
+      description: Get a specific menu with full details (vendor must own the menu)
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Menu ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Menu retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  menu:
+                    $ref: '#/components/schemas/Menu'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied (vendor doesn't own this menu)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Menu not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      summary: Update menu
+      description: Update an existing menu (vendor must own the menu)
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Menu ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMenuRequest'
+      responses:
+        '200':
+          description: Menu updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Menu updated successfully
+                  menu:
+                    $ref: '#/components/schemas/Menu'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Menu not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to update menu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Delete menu
+      description: Delete a menu (only if not assigned to any restaurants)
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Menu ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Menu deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Menu deleted successfully
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Menu not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Cannot delete menu - it is assigned to restaurant(s)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to delete menu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/vendor/restaurants/{restaurant_id}/menus/{menu_id}:
+    post:
+      summary: Assign menu to restaurant
+      description: Assign a menu to a restaurant (vendor must own both)
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: restaurant_id
+          in: path
+          description: Restaurant ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+        - name: menu_id
+          in: path
+          description: Menu ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignMenuRequest'
+      responses:
+        '201':
+          description: Menu assigned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Menu assigned to restaurant successfully
+                  restaurant_menu:
+                    $ref: '#/components/schemas/RestaurantMenu'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied (don't own restaurant or menu)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Menu already assigned to restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to assign menu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Unassign menu from restaurant
+      description: Remove menu assignment from restaurant
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: restaurant_id
+          in: path
+          description: Restaurant ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+        - name: menu_id
+          in: path
+          description: Menu ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Menu unassigned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Menu unassigned from restaurant successfully
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to unassign menu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/vendor/restaurants/{restaurant_id}/active-menu:
+    put:
+      summary: Set active menu
+      description: Set the active menu for a restaurant (menu must be assigned first)
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: restaurant_id
+          in: path
+          description: Restaurant ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetActiveMenuRequest'
+      responses:
+        '200':
+          description: Active menu updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Active menu updated successfully
+        '400':
+          description: Invalid request or menu not assigned to restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to set active menu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/restaurants/{restaurant_id}/menu:
+    get:
+      summary: Get restaurant menu
+      description: Get the active menu for a restaurant (customer view)
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: restaurant_id
+          in: path
+          description: Restaurant ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Menu retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  restaurant:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      name:
+                        type: string
+                        example: Pizza Palace
+                      description:
+                        type: string
+                        nullable: true
+                        example: Best pizza in town
+                  menu:
+                    $ref: '#/components/schemas/Menu'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Restaurant not found or no active menu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/admin/menus:
+    get:
+      summary: Get all menus
+      description: List all menus in the system (admin only)
+      tags:
+        - Menus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: vendor_id
+          in: query
+          description: Filter by vendor
+          required: false
+          schema:
+            type: integer
+            example: 1
+        - name: restaurant_id
+          in: query
+          description: Filter by restaurant assignment
+          required: false
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Menus retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  menus:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Menu'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to fetch menus
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/admin/vendor-restaurants:
+    get:
+      summary: Get all vendor-restaurant relationships
+      description: Retrieve all vendor-restaurant ownership relationships (admin only)
+      tags:
+        - Vendor-Restaurants
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Relationships retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  vendor_restaurants:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/VendorRestaurant'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to retrieve relationships
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/admin/vendor-restaurants/{id}:
+    get:
+      summary: Get specific vendor-restaurant relationship
+      description: Retrieve a specific vendor-restaurant relationship (admins can access any, vendors can access their own)
+      tags:
+        - Vendor-Restaurants
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Vendor-Restaurant relationship ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Relationship retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  vendor_restaurant:
+                    $ref: '#/components/schemas/VendorRestaurant'
+        '400':
+          description: Invalid relationship ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Relationship not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete vendor-restaurant relationship
+      description: |
+        Remove a vendor-restaurant relationship (admin only).
+        WARNING: This orphans the restaurant (no vendor owns it).
+      tags:
+        - Vendor-Restaurants
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Vendor-Restaurant relationship ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Relationship deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Vendor-restaurant relationship deleted successfully
+        '400':
+          description: Invalid relationship ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Relationship not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to delete relationship
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/admin/restaurants/{restaurant_id}/transfer:
+    put:
+      summary: Transfer restaurant ownership
+      description: Transfer restaurant ownership to a new vendor (admin only)
+      tags:
+        - Vendor-Restaurants
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: restaurant_id
+          in: path
+          description: Restaurant ID
+          required: true
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - new_vendor_id
+              properties:
+                new_vendor_id:
+                  type: integer
+                  description: ID of the vendor to transfer ownership to
+                  example: 2
+      responses:
+        '200':
+          description: Ownership transferred successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Restaurant ownership transferred successfully
+        '400':
+          description: Invalid restaurant ID or vendor ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Restaurant or vendor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to transfer ownership
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+
+  # ========================================================================
+  # ORDER ENDPOINTS
+  # ========================================================================
+
+  # Customer Order Endpoints
+  /api/customer/orders:
+    post:
+      summary: Create order
+      description: |
+        Create a new order for the authenticated customer.
+        The system will:
+        1. Validate restaurant is active and approved
+        2. Validate delivery address belongs to customer
+        3. Calculate totals (subtotal, tax, delivery fee)
+        4. Check minimum order amount
+        5. Create order and items in a transaction
+      tags:
+        - Customer Orders
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order placed successfully
+                  data:
+                    type: object
+                    properties:
+                      order_id:
+                        type: integer
+                        example: 42
+                      total_amount:
+                        type: number
+                        format: double
+                        example: 45.67
+                      status:
+                        type: string
+                        example: pending
+        '400':
+          description: Invalid request (restaurant inactive, minimum order not met, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Only customers can create orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Restaurant or address not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to create order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: Get customer orders
+      description: Retrieve all orders for the authenticated customer with pagination
+      tags:
+        - Customer Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number (1-indexed)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+            example: 1
+        - name: per_page
+          in: query
+          description: Number of orders per page (max 100)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+            example: 20
+      responses:
+        '200':
+          description: Orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Orders retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      orders:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Order'
+                      page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 20
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Customer profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to retrieve orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/customer/orders/{id}:
+    get:
+      summary: Get order details
+      description: Retrieve detailed information about a specific order including items and status history
+      tags:
+        - Customer Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Order ID
+          required: true
+          schema:
+            type: integer
+            example: 42
+      responses:
+        '200':
+          description: Order details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order details retrieved successfully
+                  data:
+                    $ref: '#/components/schemas/OrderDetailsResponse'
+        '400':
+          description: Invalid order ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Not authorized to view this order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to retrieve order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Cancel order
+      description: Cancel a customer order (only allowed for specific statuses)
+      tags:
+        - Customer Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Order ID
+          required: true
+          schema:
+            type: integer
+            example: 42
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelOrderRequest'
+      responses:
+        '200':
+          description: Order cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order cancelled successfully
+        '400':
+          description: Order cannot be cancelled in current status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Not authorized to cancel this order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to cancel order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Vendor Order Endpoints
+  /api/vendor/orders:
+    get:
+      summary: Get vendor orders
+      description: Retrieve orders for all restaurants owned by the vendor with optional status filtering
+      tags:
+        - Vendor Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter orders by status
+          required: false
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+        - name: page
+          in: query
+          description: Page number (1-indexed)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+            example: 1
+        - name: per_page
+          in: query
+          description: Number of orders per page (max 100)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+            example: 20
+      responses:
+        '200':
+          description: Orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Orders retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      orders:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Order'
+                      page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 20
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Vendor profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to retrieve orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/vendor/orders/{id}:
+    get:
+      summary: Get vendor order details
+      description: Retrieve detailed information about an order for a restaurant owned by the vendor
+      tags:
+        - Vendor Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Order ID
+          required: true
+          schema:
+            type: integer
+            example: 42
+      responses:
+        '200':
+          description: Order details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order details retrieved successfully
+                  data:
+                    $ref: '#/components/schemas/OrderDetailsResponse'
+        '400':
+          description: Invalid order ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Not authorized to view this order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to retrieve order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Update order status
+      description: |
+        Update the status of an order (vendor action).
+        Valid transitions:
+        - pending -> confirmed/cancelled
+        - confirmed -> preparing/cancelled
+        - preparing -> ready/cancelled
+        - ready -> driver_assigned/cancelled
+      tags:
+        - Vendor Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Order ID
+          required: true
+          schema:
+            type: integer
+            example: 42
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrderStatusRequest'
+      responses:
+        '200':
+          description: Order status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order status updated successfully
+                  data:
+                    type: object
+                    properties:
+                      order_id:
+                        type: integer
+                        example: 42
+                      status:
+                        $ref: '#/components/schemas/OrderStatus'
+        '400':
+          description: Invalid status transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Not authorized to update this order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to update order status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Driver Order Endpoints
+  /api/driver/orders/available:
+    get:
+      summary: Get available orders
+      description: Retrieve orders that are ready for driver assignment (status=ready, no driver assigned)
+      tags:
+        - Driver Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            default: 1
+            example: 1
+        - name: per_page
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+            example: 20
+      responses:
+        '200':
+          description: Available orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Available orders retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      orders:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Order'
+                      page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 20
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Driver access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to retrieve available orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/driver/orders:
+    get:
+      summary: Get driver's orders
+      description: Retrieve all orders assigned to the authenticated driver
+      tags:
+        - Driver Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            default: 1
+            example: 1
+        - name: per_page
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+            example: 20
+      responses:
+        '200':
+          description: Driver orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Driver orders retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      orders:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Order'
+                      page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 20
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Driver access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Driver profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to retrieve driver orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/driver/orders/{id}:
+    get:
+      summary: Get driver order details
+      description: Retrieve detailed information about a specific order (must be assigned to driver or available)
+      tags:
+        - Driver Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Order ID
+          required: true
+          schema:
+            type: integer
+            example: 42
+      responses:
+        '200':
+          description: Order details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order details retrieved successfully
+                  data:
+                    $ref: '#/components/schemas/OrderDetailsResponse'
+        '400':
+          description: Invalid order ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Not authorized to view this order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to retrieve order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/driver/orders/{id}/assign:
+    post:
+      summary: Assign order to driver
+      description: |
+        Driver self-assigns to an available order.
+        Order must be in 'ready' status and not already assigned to another driver.
+        Automatically updates order status to 'driver_assigned'.
+      tags:
+        - Driver Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Order ID
+          required: true
+          schema:
+            type: integer
+            example: 42
+      responses:
+        '200':
+          description: Order assigned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order assigned successfully
+                  data:
+                    type: object
+                    properties:
+                      order_id:
+                        type: integer
+                        example: 42
+                      driver_id:
+                        type: integer
+                        example: 5
+                      status:
+                        type: string
+                        example: driver_assigned
+        '400':
+          description: Invalid order ID or order not available for assignment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Driver access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Driver profile or order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to assign order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/driver/orders/{id}/status:
+    put:
+      summary: Update driver order status
+      description: |
+        Update the status of an order assigned to the driver.
+        Valid transitions for drivers:
+        - driver_assigned -> picked_up
+        - picked_up -> in_transit
+        - in_transit -> delivered
+      tags:
+        - Driver Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Order ID
+          required: true
+          schema:
+            type: integer
+            example: 42
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrderStatusRequest'
+      responses:
+        '200':
+          description: Order status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order status updated successfully
+                  data:
+                    type: object
+                    properties:
+                      order_id:
+                        type: integer
+                        example: 42
+                      status:
+                        $ref: '#/components/schemas/OrderStatus'
+        '400':
+          description: Invalid status transition or request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Not assigned to this order or driver access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to update order status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Admin Order Endpoints
+  /api/admin/orders:
+    get:
+      summary: Get all orders
+      description: Retrieve all orders with filtering and pagination (admin only)
+      tags:
+        - Admin Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by order status
+          required: false
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+        - name: restaurant_id
+          in: query
+          description: Filter by restaurant ID
+          required: false
+          schema:
+            type: integer
+            example: 1
+        - name: customer_id
+          in: query
+          description: Filter by customer ID
+          required: false
+          schema:
+            type: integer
+            example: 1
+        - name: page
+          in: query
+          description: Page number (1-indexed)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+            example: 1
+        - name: per_page
+          in: query
+          description: Number of orders per page (max 500)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+            example: 50
+      responses:
+        '200':
+          description: Orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Orders retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      orders:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Order'
+                      total_count:
+                        type: integer
+                        example: 150
+                      page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 50
+                      total_pages:
+                        type: integer
+                        example: 3
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to retrieve orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/admin/orders/{id}:
+    get:
+      summary: Get admin order details
+      description: Retrieve detailed information about any order (admin only)
+      tags:
+        - Admin Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Order ID
+          required: true
+          schema:
+            type: integer
+            example: 42
+      responses:
+        '200':
+          description: Order details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order details retrieved successfully
+                  data:
+                    $ref: '#/components/schemas/OrderDetailsResponse'
+        '400':
+          description: Invalid order ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to retrieve order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Update admin order
+      description: Update any order field (admin override)
+      tags:
+        - Admin Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Order ID
+          required: true
+          schema:
+            type: integer
+            example: 42
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  $ref: '#/components/schemas/OrderStatus'
+                total_amount:
+                  type: number
+                  format: double
+                  example: 50.00
+                driver_id:
+                  type: integer
+                  example: 5
+      responses:
+        '200':
+          description: Order updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order updated successfully
+                  data:
+                    type: object
+                    properties:
+                      order_id:
+                        type: integer
+                        example: 42
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to update order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/admin/orders/stats:
+    get:
+      summary: Get order statistics
+      description: Retrieve order statistics for admin dashboards with optional filtering
+      tags:
+        - Admin Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: restaurant_id
+          in: query
+          description: Filter stats by restaurant ID
+          required: false
+          schema:
+            type: integer
+            example: 1
+        - name: customer_id
+          in: query
+          description: Filter stats by customer ID
+          required: false
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Order statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order statistics retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      stats:
+                        $ref: '#/components/schemas/OrderStats'
+                      status_counts:
+                        type: object
+                        additionalProperties:
+                          type: integer
+                        example:
+                          pending: 15
+                          confirmed: 8
+                          preparing: 5
+                          delivered: 100
+                          cancelled: 3
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to retrieve order statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/admin/orders/export:
+    get:
+      summary: Export orders CSV
+      description: Export orders to CSV format with optional filtering (max 10,000 orders)
+      tags:
+        - Admin Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by order status
+          required: false
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+        - name: restaurant_id
+          in: query
+          description: Filter by restaurant ID
+          required: false
+          schema:
+            type: integer
+            example: 1
+        - name: customer_id
+          in: query
+          description: Filter by customer ID
+          required: false
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: CSV file generated successfully
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              description: Attachment filename with timestamp
+              schema:
+                type: string
+                example: attachment; filename=orders_export_2024-01-15_14-30-00.csv
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to export orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ========================================================================
+  # SYSTEM SETTINGS ENDPOINTS (Admin Only)
+  # ========================================================================
+
+  /api/admin/settings:
+    get:
+      summary: Get all system settings
+      description: Retrieve all system settings grouped by category (admin only)
+      tags:
+        - System Settings
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          description: Filter settings by category
+          required: false
+          schema:
+            type: string
+            example: orders
+      responses:
+        '200':
+          description: Settings retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettingsResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to retrieve settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Update multiple settings
+      description: Update multiple system settings in a single transaction (admin only)
+      tags:
+        - System Settings
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMultipleSettingsRequest'
+      responses:
+        '200':
+          description: Settings updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Settings updated successfully"
+                  data:
+                    $ref: '#/components/schemas/BatchUpdateResult'
+        '400':
+          description: Validation error or invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/admin/settings/categories:
+    get:
+      summary: Get all setting categories
+      description: Retrieve list of all unique setting categories (admin only)
+      tags:
+        - System Settings
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Categories retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoriesResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/admin/settings/{key}:
+    get:
+      summary: Get setting by key
+      description: Retrieve a single system setting by its unique key (admin only)
+      tags:
+        - System Settings
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          description: Setting key
+          required: true
+          schema:
+            type: string
+            example: tax_rate
+      responses:
+        '200':
+          description: Setting retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Setting retrieved successfully"
+                  data:
+                    $ref: '#/components/schemas/SystemSetting'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Setting not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Update setting by key
+      description: Update a single system setting value (admin only)
+      tags:
+        - System Settings
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          description: Setting key
+          required: true
+          schema:
+            type: string
+            example: tax_rate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSettingRequest'
+      responses:
+        '200':
+          description: Setting updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Setting updated successfully"
+                  data:
+                    $ref: '#/components/schemas/SystemSetting'
+        '400':
+          description: Validation error or read-only setting
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Setting not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/login
+
+  schemas:
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: customer1
+        password:
+          type: string
+          format: password
+          example: password123
+
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Login successful
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        user:
+          $ref: '#/components/schemas/User'
+        profile:
+          oneOf:
+            - $ref: '#/components/schemas/Customer'
+            - $ref: '#/components/schemas/Vendor'
+            - $ref: '#/components/schemas/Driver'
+            - $ref: '#/components/schemas/Admin'
+
+    SignupRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+        - user_type
+        - full_name
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          example: newuser
+        email:
+          type: string
+          format: email
+          example: newuser@example.com
+        password:
+          type: string
+          format: password
+          minLength: 6
+          example: password123
+        user_type:
+          type: string
+          enum: [customer, vendor, driver, admin]
+          example: customer
+        full_name:
+          type: string
+          example: John Doe
+        phone:
+          type: string
+          example: "+1234567890"
+        business_name:
+          type: string
+          description: Required for vendor registration
+          example: Joe's Pizza
+        description:
+          type: string
+          description: Optional for vendor registration
+          example: Best pizza in town
+        vehicle_type:
+          type: string
+          description: Optional for driver registration
+          example: Car
+        vehicle_plate:
+          type: string
+          description: Optional for driver registration
+          example: ABC-123
+        license_number:
+          type: string
+          description: Optional for driver registration
+          example: D1234567
+
+    SignupResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: User registered successfully
+        user_id:
+          type: integer
+          example: 5
+
+    ProfileResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        user:
+          $ref: '#/components/schemas/User'
+        profile:
+          oneOf:
+            - $ref: '#/components/schemas/Customer'
+            - $ref: '#/components/schemas/Vendor'
+            - $ref: '#/components/schemas/Driver'
+            - $ref: '#/components/schemas/Admin'
+        auth_info:
+          type: object
+          properties:
+            user_id:
+              type: integer
+              example: 1
+            username:
+              type: string
+              example: customer1
+            user_type:
+              type: string
+              example: customer
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        username:
+          type: string
+          example: customer1
+        email:
+          type: string
+          format: email
+          example: customer1@example.com
+        user_type:
+          type: string
+          enum: [customer, vendor, driver, admin]
+          example: customer
+        user_role:
+          type: string
+          description: User role, typically matches user_type but can be customized
+          example: customer
+        status:
+          type: string
+          enum: [active, inactive, suspended]
+          example: active
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+        updated_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+
+    Customer:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 1
+        full_name:
+          type: string
+          example: John Doe
+        phone:
+          type: string
+          nullable: true
+          example: "+1234567890"
+        default_address_id:
+          type: integer
+          nullable: true
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Vendor:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 2
+        business_name:
+          type: string
+          example: Joe's Pizza
+        description:
+          type: string
+          nullable: true
+          example: Best pizza in town
+        phone:
+          type: string
+          nullable: true
+          example: "+1234567890"
+        address_line1:
+          type: string
+          nullable: true
+        address_line2:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+        postal_code:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          format: double
+          nullable: true
+        longitude:
+          type: number
+          format: double
+          nullable: true
+        is_active:
+          type: boolean
+          example: true
+        rating:
+          type: number
+          format: double
+          example: 4.5
+        total_orders:
+          type: integer
+          example: 100
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Driver:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 3
+        full_name:
+          type: string
+          example: Jane Smith
+        phone:
+          type: string
+          example: "+1234567890"
+        vehicle_type:
+          type: string
+          nullable: true
+          example: Car
+        vehicle_plate:
+          type: string
+          nullable: true
+          example: ABC-123
+        license_number:
+          type: string
+          nullable: true
+          example: D1234567
+        is_available:
+          type: boolean
+          example: true
+        current_latitude:
+          type: number
+          format: double
+          nullable: true
+        current_longitude:
+          type: number
+          format: double
+          nullable: true
+        rating:
+          type: number
+          format: double
+          example: 4.8
+        total_deliveries:
+          type: integer
+          example: 250
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Admin:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 4
+        full_name:
+          type: string
+          example: Admin User
+        phone:
+          type: string
+          nullable: true
+          example: "+1234567890"
+        role:
+          type: string
+          nullable: true
+          example: System Administrator
+        permissions:
+          type: string
+          nullable: true
+          description: JSONB stored as string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CustomerAddress:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        customer_id:
+          type: integer
+          example: 1
+        address_line1:
+          type: string
+          example: 123 Main St
+        address_line2:
+          type: string
+          nullable: true
+          example: Apt 4B
+        city:
+          type: string
+          example: New York
+        state:
+          type: string
+          nullable: true
+          example: NY
+        postal_code:
+          type: string
+          nullable: true
+          example: "10001"
+        country:
+          type: string
+          example: USA
+        latitude:
+          type: number
+          format: double
+          nullable: true
+          example: 40.7128
+        longitude:
+          type: number
+          format: double
+          nullable: true
+          example: -74.0060
+        is_default:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateAddressRequest:
+      type: object
+      required:
+        - address_line1
+        - city
+        - country
+      properties:
+        address_line1:
+          type: string
+          example: 123 Main St
+        address_line2:
+          type: string
+          nullable: true
+          example: Apt 4B
+        city:
+          type: string
+          example: New York
+        state:
+          type: string
+          nullable: true
+          example: NY
+        postal_code:
+          type: string
+          nullable: true
+          example: "10001"
+        country:
+          type: string
+          example: USA
+        latitude:
+          type: number
+          format: double
+          nullable: true
+          example: 40.7128
+        longitude:
+          type: number
+          format: double
+          nullable: true
+          example: -74.0060
+        is_default:
+          type: boolean
+          example: false
+
+    UpdateAddressRequest:
+      type: object
+      properties:
+        address_line1:
+          type: string
+          nullable: true
+          example: 456 Oak Ave
+        address_line2:
+          type: string
+          nullable: true
+          example: Suite 200
+        city:
+          type: string
+          nullable: true
+          example: Brooklyn
+        state:
+          type: string
+          nullable: true
+          example: NY
+        postal_code:
+          type: string
+          nullable: true
+          example: "11201"
+        country:
+          type: string
+          nullable: true
+          example: USA
+        latitude:
+          type: number
+          format: double
+          nullable: true
+          example: 40.6782
+        longitude:
+          type: number
+          format: double
+          nullable: true
+          example: -73.9442
+        is_default:
+          type: boolean
+          nullable: true
+          example: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: Error message describing what went wrong
+        error_type:
+          type: string
+          description: Classification of the error (only present for authentication errors)
+          enum:
+            - SIGNATURE_MISMATCH
+            - TOKEN_EXPIRED
+            - MALFORMED_TOKEN
+            - VALIDATION_ERROR
+          example: TOKEN_EXPIRED
+
+    Restaurant:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Pizza Palace
+        description:
+          type: string
+          nullable: true
+          example: Authentic Italian pizza and pasta
+        phone:
+          type: string
+          nullable: true
+          example: "+1234567891"
+        address_line1:
+          type: string
+          nullable: true
+          example: 123 Main St
+        address_line2:
+          type: string
+          nullable: true
+          example: Suite 100
+        city:
+          type: string
+          nullable: true
+          example: New York
+        state:
+          type: string
+          nullable: true
+          example: NY
+        postal_code:
+          type: string
+          nullable: true
+          example: "10001"
+        country:
+          type: string
+          nullable: true
+          example: USA
+        latitude:
+          type: number
+          format: double
+          nullable: true
+          example: 40.7128
+        longitude:
+          type: number
+          format: double
+          nullable: true
+          example: -74.0060
+        is_active:
+          type: boolean
+          example: true
+        rating:
+          type: number
+          format: double
+          example: 4.5
+        total_orders:
+          type: integer
+          example: 150
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+        updated_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+
+    VendorRestaurant:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        vendor_id:
+          type: integer
+          example: 1
+        restaurant_id:
+          type: integer
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+        updated_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+
+    CreateRestaurantRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: Pizza Palace
+        description:
+          type: string
+          nullable: true
+          example: Authentic Italian pizza and pasta
+        phone:
+          type: string
+          nullable: true
+          example: "+1234567891"
+        address_line1:
+          type: string
+          nullable: true
+          example: 123 Main St
+        address_line2:
+          type: string
+          nullable: true
+          example: Suite 100
+        city:
+          type: string
+          nullable: true
+          example: New York
+        state:
+          type: string
+          nullable: true
+          example: NY
+        postal_code:
+          type: string
+          nullable: true
+          example: "10001"
+        country:
+          type: string
+          nullable: true
+          example: USA
+        latitude:
+          type: number
+          format: double
+          nullable: true
+          example: 40.7128
+        longitude:
+          type: number
+          format: double
+          nullable: true
+          example: -74.0060
+
+    UpdateRestaurantRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+          example: Pizza Palace NYC
+        description:
+          type: string
+          nullable: true
+          example: Best authentic Italian pizza in town
+        phone:
+          type: string
+          nullable: true
+          example: "+1234567891"
+        address_line1:
+          type: string
+          nullable: true
+          example: 456 Oak Ave
+        address_line2:
+          type: string
+          nullable: true
+          example: Floor 2
+        city:
+          type: string
+          nullable: true
+          example: Brooklyn
+        state:
+          type: string
+          nullable: true
+          example: NY
+        postal_code:
+          type: string
+          nullable: true
+          example: "11201"
+        country:
+          type: string
+          nullable: true
+          example: USA
+        latitude:
+          type: number
+          format: double
+          nullable: true
+          example: 40.6782
+        longitude:
+          type: number
+          format: double
+          nullable: true
+          example: -73.9442
+        is_active:
+          type: boolean
+          nullable: true
+          example: true
+
+    Menu:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Main Menu
+        description:
+          type: string
+          nullable: true
+          example: Our signature dishes
+        menu_config:
+          type: string
+          description: JSONB structure containing menu data (stored as JSON string)
+          example: '{"version":"1.0","categories":[{"id":"cat_1","name":"Pizzas","items":[{"id":"item_1","name":"Margherita","price":12.99}]}]}'
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+        updated_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+
+    MenuWithRestaurants:
+      allOf:
+        - $ref: '#/components/schemas/Menu'
+        - type: object
+          properties:
+            assigned_restaurants:
+              type: array
+              items:
+                $ref: '#/components/schemas/RestaurantMenuAssignment'
+
+    RestaurantMenuAssignment:
+      type: object
+      properties:
+        restaurant_id:
+          type: integer
+          example: 1
+        restaurant_name:
+          type: string
+          example: Pizza Palace
+        is_active:
+          type: boolean
+          example: true
+        display_order:
+          type: integer
+          example: 1
+
+    RestaurantMenu:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        restaurant_id:
+          type: integer
+          example: 1
+        menu_id:
+          type: integer
+          example: 1
+        is_active:
+          type: boolean
+          example: false
+        display_order:
+          type: integer
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+        updated_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+
+    CreateMenuRequest:
+      type: object
+      required:
+        - name
+        - menu_config
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Summer Menu
+        description:
+          type: string
+          example: Fresh seasonal offerings
+        menu_config:
+          type: string
+          description: JSON string containing menu structure
+          example: '{"version":"1.0","categories":[]}'
+        is_active:
+          type: boolean
+          default: true
+          example: true
+
+    UpdateMenuRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Updated Menu Name
+        description:
+          type: string
+          nullable: true
+          example: Updated description
+        menu_config:
+          type: string
+          description: JSON string containing menu structure
+          example: '{"version":"1.0","categories":[...]}'
+        is_active:
+          type: boolean
+          example: false
+
+    AssignMenuRequest:
+      type: object
+      properties:
+        is_active:
+          type: boolean
+          default: false
+          example: false
+        display_order:
+          type: integer
+          default: 0
+          example: 1
+
+    SetActiveMenuRequest:
+      type: object
+      required:
+        - menu_id
+      properties:
+        menu_id:
+          type: integer
+          example: 1
+
+    # ========================================================================
+    # SYSTEM SETTINGS SCHEMAS
+    # ========================================================================
+
+    SystemSetting:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        setting_key:
+          type: string
+          example: tax_rate
+        setting_value:
+          type: string
+          example: "0.085"
+        data_type:
+          type: string
+          enum: [string, number, boolean, json]
+          example: number
+        description:
+          type: string
+          example: "Sales tax rate (0.085 = 8.5%)"
+        category:
+          type: string
+          example: orders
+        is_editable:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SettingsByCategory:
+      type: object
+      additionalProperties:
+        type: array
+        items:
+          $ref: '#/components/schemas/SystemSetting'
+      example:
+        orders:
+          - id: 1
+            setting_key: minimum_order_amount
+            setting_value: "10.00"
+            data_type: number
+            description: "Minimum order subtotal required in dollars"
+            category: orders
+            is_editable: true
+        payments:
+          - id: 5
+            setting_key: platform_commission_rate
+            setting_value: "0.15"
+            data_type: number
+            description: "Platform commission rate (0.15 = 15%)"
+            category: payments
+            is_editable: true
+
+    SettingsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Settings retrieved successfully"
+        data:
+          type: object
+          properties:
+            settings:
+              $ref: '#/components/schemas/SettingsByCategory'
+            total_count:
+              type: integer
+              example: 18
+            categories_count:
+              type: integer
+              example: 5
+
+    UpdateSettingRequest:
+      type: object
+      required:
+        - value
+      properties:
+        value:
+          type: string
+          example: "0.09"
+
+    BatchUpdateSettingRequest:
+      type: object
+      required:
+        - key
+        - value
+      properties:
+        key:
+          type: string
+          example: tax_rate
+        value:
+          type: string
+          example: "0.09"
+
+    UpdateMultipleSettingsRequest:
+      type: object
+      required:
+        - settings
+      properties:
+        settings:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/BatchUpdateSettingRequest'
+
+    BatchUpdateResult:
+      type: object
+      properties:
+        success_count:
+          type: integer
+          example: 3
+        failure_count:
+          type: integer
+          example: 0
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+              message:
+                type: string
+        updated_keys:
+          type: array
+          items:
+            type: string
+          example: [tax_rate, minimum_order_amount, default_delivery_fee]
+
+    CategoriesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Categories retrieved successfully"
+        data:
+          type: object
+          properties:
+            categories:
+              type: array
+              items:
+                type: string
+              example: [orders, payments, delivery, system, business]
+            count:
+              type: integer
+              example: 5
+
+    # ========================================================================
+    # ORDER SCHEMAS
+    # ========================================================================
+
+    OrderStatus:
+      type: string
+      enum:
+        - cart
+        - pending
+        - confirmed
+        - preparing
+        - ready
+        - driver_assigned
+        - picked_up
+        - in_transit
+        - delivered
+        - cancelled
+        - refunded
+      example: pending
+      description: |
+        Order status values:
+        - cart: Order in shopping cart (not yet placed)
+        - pending: Order placed, awaiting restaurant confirmation
+        - confirmed: Restaurant confirmed order
+        - preparing: Restaurant preparing order
+        - ready: Order ready for pickup
+        - driver_assigned: Driver assigned to order
+        - picked_up: Driver picked up order
+        - in_transit: Order in delivery
+        - delivered: Order delivered to customer
+        - cancelled: Order cancelled
+        - refunded: Order refunded
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 42
+        customer_id:
+          type: integer
+          example: 1
+        restaurant_id:
+          type: integer
+          example: 1
+        delivery_address_id:
+          type: integer
+          nullable: true
+          example: 1
+        driver_id:
+          type: integer
+          nullable: true
+          example: 3
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        subtotal_amount:
+          type: number
+          format: double
+          example: 35.97
+        tax_amount:
+          type: number
+          format: double
+          example: 3.06
+        delivery_fee:
+          type: number
+          format: double
+          example: 5.00
+        discount_amount:
+          type: number
+          format: double
+          example: 0.00
+        total_amount:
+          type: number
+          format: double
+          example: 44.03
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+        placed_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T10:30:00Z
+        confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T10:35:00Z
+        ready_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T11:00:00Z
+        delivered_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T11:30:00Z
+        cancelled_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T11:30:00Z
+        special_instructions:
+          type: string
+          nullable: true
+          example: Please ring doorbell
+        cancellation_reason:
+          type: string
+          nullable: true
+          example: Customer requested cancellation
+        estimated_preparation_time:
+          type: integer
+          nullable: true
+          description: Estimated preparation time in minutes
+          example: 25
+        estimated_delivery_time:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T11:25:00Z
+        is_active:
+          type: boolean
+          example: true
+
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        order_id:
+          type: integer
+          example: 42
+        menu_item_name:
+          type: string
+          example: Margherita Pizza
+        menu_item_description:
+          type: string
+          nullable: true
+          example: Fresh mozzarella, tomato sauce, basil
+        price_at_time:
+          type: number
+          format: double
+          description: Price when order was placed (not current menu price)
+          example: 12.99
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+        customizations:
+          type: object
+          description: JSONB customizations (stored as JSON)
+          example:
+            size: large
+            toppings: [extra cheese, mushrooms]
+            notes: Well done
+        line_total:
+          type: number
+          format: double
+          description: price_at_time * quantity
+          example: 25.98
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    OrderStatusHistory:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        order_id:
+          type: integer
+          example: 42
+        user_id:
+          type: integer
+          nullable: true
+          description: User who performed the status change
+          example: 2
+        from_status:
+          type: string
+          nullable: true
+          example: pending
+        to_status:
+          type: string
+          example: confirmed
+        notes:
+          type: string
+          nullable: true
+          example: Estimated prep time 25 minutes
+        metadata:
+          type: object
+          nullable: true
+          description: JSONB metadata (stored as JSON)
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:35:00Z
+
+    CreateOrderRequest:
+      type: object
+      required:
+        - restaurant_id
+        - delivery_address_id
+        - items
+      properties:
+        restaurant_id:
+          type: integer
+          example: 1
+        delivery_address_id:
+          type: integer
+          example: 1
+        special_instructions:
+          type: string
+          maxLength: 500
+          example: Please ring doorbell
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CreateOrderItemRequest'
+
+    CreateOrderItemRequest:
+      type: object
+      required:
+        - menu_item_name
+        - price
+        - quantity
+      properties:
+        menu_item_name:
+          type: string
+          example: Margherita Pizza
+        menu_item_description:
+          type: string
+          example: Fresh mozzarella, tomato sauce, basil
+        price:
+          type: number
+          format: double
+          minimum: 0.01
+          example: 12.99
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+        customizations:
+          type: object
+          example:
+            size: large
+            toppings: [extra cheese, mushrooms]
+
+    UpdateOrderStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        notes:
+          type: string
+          maxLength: 500
+          example: Estimated prep time 25 minutes
+        estimated_preparation_time:
+          type: integer
+          minimum: 1
+          description: Estimated preparation time in minutes (only when confirming order)
+          example: 25
+
+    CancelOrderRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          example: Customer changed their mind
+
+    OrderDetailsResponse:
+      type: object
+      properties:
+        order:
+          $ref: '#/components/schemas/Order'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        status_history:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderStatusHistory'
+        restaurant:
+          $ref: '#/components/schemas/RestaurantInfo'
+        delivery_address:
+          $ref: '#/components/schemas/CustomerAddress'
+        customer:
+          $ref: '#/components/schemas/CustomerInfo'
+        driver:
+          $ref: '#/components/schemas/DriverInfo'
+
+    OrderListResponse:
+      type: object
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderSummary'
+        total_count:
+          type: integer
+          example: 150
+        page:
+          type: integer
+          example: 1
+        per_page:
+          type: integer
+          example: 20
+
+    OrderSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 42
+        customer_id:
+          type: integer
+          example: 1
+        restaurant_id:
+          type: integer
+          example: 1
+        restaurant_name:
+          type: string
+          example: Pizza Palace
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        total_amount:
+          type: number
+          format: double
+          example: 44.03
+        item_count:
+          type: integer
+          description: Total number of items in order
+          example: 3
+        placed_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T10:30:00Z
+        estimated_delivery_time:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T11:25:00Z
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+
+    OrderStats:
+      type: object
+      properties:
+        total_orders:
+          type: integer
+          description: Total number of orders
+          example: 150
+        pending_orders:
+          type: integer
+          description: Number of pending orders
+          example: 15
+        confirmed_orders:
+          type: integer
+          description: Number of confirmed orders
+          example: 8
+        delivered_orders:
+          type: integer
+          description: Number of delivered orders
+          example: 100
+        cancelled_orders:
+          type: integer
+          description: Number of cancelled orders
+          example: 3
+        total_revenue:
+          type: number
+          format: double
+          description: Total revenue from delivered orders
+          example: 4532.50
+        average_order_value:
+          type: number
+          format: double
+          description: Average value of delivered orders
+          example: 45.33
+
+    RestaurantInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Pizza Palace
+        phone:
+          type: string
+          example: "+1234567891"
+        address:
+          type: string
+          example: 123 Main St, New York, NY 10001
+
+    CustomerInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        full_name:
+          type: string
+          example: John Doe
+        phone:
+          type: string
+          example: "+1234567890"
+
+    DriverInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 3
+        full_name:
+          type: string
+          example: Jane Smith
+        phone:
+          type: string
+          example: "+1234567892"
+        vehicle_type:
+          type: string
+          example: Car

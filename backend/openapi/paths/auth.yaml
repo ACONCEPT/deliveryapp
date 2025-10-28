@@ -1,0 +1,141 @@
+/api/login:
+  post:
+    summary: User login
+    description: Authenticate a user and receive a JWT token
+    tags:
+      - Authentication
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/auth.yaml#/LoginRequest'
+    responses:
+      '200':
+        description: Login successful
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/auth.yaml#/LoginResponse'
+      '400':
+        description: Invalid request body
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '401':
+        description: Invalid credentials
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+
+/api/signup:
+  post:
+    summary: User registration
+    description: Register a new user account with associated profile
+    tags:
+      - Authentication
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/auth.yaml#/SignupRequest'
+    responses:
+      '201':
+        description: User registered successfully
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/auth.yaml#/SignupResponse'
+      '400':
+        description: Invalid request body or user type
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '409':
+        description: Username or email already exists
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '500':
+        description: Failed to create user or profile
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+
+/api/debug/token-info:
+  get:
+    summary: Debug token information (Development only)
+    description: |
+      Returns detailed information about a JWT token for debugging purposes.
+
+      **⚠️ WARNING:** This endpoint is only available in development mode and should never be enabled in production.
+
+      Useful for debugging JWT signature mismatches, expiration issues, and verifying token claims.
+    tags:
+      - Authentication
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Token information retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token_preview:
+                  type: string
+                  description: First 30 characters of the token
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6...
+                token_length:
+                  type: integer
+                  description: Total length of the token in characters
+                  example: 187
+                secret_length:
+                  type: integer
+                  description: Length of the JWT secret used
+                  example: 36
+                secret_preview:
+                  type: string
+                  description: First 8 characters of the JWT secret
+                  example: change-t...
+                claims:
+                  type: object
+                  description: Decoded JWT claims
+                  properties:
+                    user_id:
+                      type: integer
+                      example: 1
+                    username:
+                      type: string
+                      example: customer1
+                    user_type:
+                      type: string
+                      example: customer
+                    issuer:
+                      type: string
+                      example: delivery_app
+                    issued_at:
+                      type: object
+                      description: Token issuance time (NumericDate)
+                    expires_at:
+                      type: object
+                      description: Token expiration time (NumericDate)
+      '400':
+        description: No Authorization header or invalid format
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '401':
+        description: Invalid or expired token
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'

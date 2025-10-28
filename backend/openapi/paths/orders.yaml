@@ -1,0 +1,1000 @@
+  # Customer Order Endpoints
+  /api/customer/orders:
+    post:
+      summary: Create order
+      description: |
+        Create a new order for the authenticated customer.
+        The system will:
+        1. Validate restaurant is active and approved
+        2. Validate delivery address belongs to customer
+        3. Calculate totals (subtotal, tax, delivery fee)
+        4. Check minimum order amount
+        5. Create order and items in a transaction
+      tags:
+        - Customer Orders
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/order.yaml#/CreateOrderRequest'
+      responses:
+        '201':
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order placed successfully
+                  data:
+                    type: object
+                    properties:
+                      order_id:
+                        type: integer
+                        example: 42
+                      total_amount:
+                        type: number
+                        format: double
+                        example: 45.67
+                      status:
+                        type: string
+                        example: pending
+        '400':
+          description: Invalid request (restaurant inactive, minimum order not met, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Only customers can create orders
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Restaurant or address not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to create order
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+    get:
+      summary: Get customer orders
+      description: Retrieve all orders for the authenticated customer with pagination
+      tags:
+        - Customer Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number (1-indexed)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+            example: 1
+        - name: per_page
+          in: query
+          description: Number of orders per page (max 100)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+            example: 20
+      responses:
+        '200':
+          description: Orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Orders retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      orders:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Order'
+                      page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 20
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Customer profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to retrieve orders
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/customer/orders/{id}:
+    get:
+      summary: Get order details
+      description: Retrieve detailed information about a specific order including items and status history
+      tags:
+        - Customer Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Order ID
+          required: true
+          schema:
+            type: integer
+            example: 42
+      responses:
+        '200':
+          description: Order details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order details retrieved successfully
+                  data:
+                    $ref: '../schemas/order.yaml#/OrderDetailsResponse'
+        '400':
+          description: Invalid order ID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Not authorized to view this order
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to retrieve order details
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+    put:
+      summary: Cancel order
+      description: Cancel a customer order (only allowed for specific statuses)
+      tags:
+        - Customer Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Order ID
+          required: true
+          schema:
+            type: integer
+            example: 42
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/order.yaml#/CancelOrderRequest'
+      responses:
+        '200':
+          description: Order cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order cancelled successfully
+        '400':
+          description: Order cannot be cancelled in current status
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Not authorized to cancel this order
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to cancel order
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  # Vendor Order Endpoints
+  /api/vendor/orders:
+    get:
+      summary: Get vendor orders
+      description: Retrieve orders for all restaurants owned by the vendor with optional status filtering
+      tags:
+        - Vendor Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter orders by status
+          required: false
+          schema:
+            $ref: '../schemas/order.yaml#/OrderStatus'
+        - name: page
+          in: query
+          description: Page number (1-indexed)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+            example: 1
+        - name: per_page
+          in: query
+          description: Number of orders per page (max 100)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+            example: 20
+      responses:
+        '200':
+          description: Orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Orders retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      orders:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Order'
+                      page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 20
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Vendor profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to retrieve orders
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/vendor/orders/by-status:
+    get:
+      summary: Get vendor orders by status
+      description: Retrieve orders filtered by a required status for all restaurants owned by the vendor. Unlike the /api/vendor/orders endpoint where status is optional, this endpoint requires the status parameter.
+      tags:
+        - Vendor Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter orders by status (required)
+          required: true
+          schema:
+            $ref: '../schemas/order.yaml#/OrderStatus'
+      responses:
+        '200':
+          description: Orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Orders retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      orders:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Order'
+                      status:
+                        type: string
+                        description: The status filter that was applied
+                        example: pending
+        '400':
+          description: Status parameter is required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Vendor profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to retrieve orders or restaurants
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/vendor/orders/stats:
+    get:
+      summary: Get vendor order statistics
+      description: Retrieve order statistics for all restaurants owned by the vendor
+      tags:
+        - Vendor Orders
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Statistics retrieved successfully
+                  data:
+                    $ref: '../schemas/order.yaml#/OrderStats'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Vendor profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to retrieve statistics
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/vendor/orders/{id}:
+    get:
+      summary: Get vendor order details
+      description: Retrieve detailed information about an order for a restaurant owned by the vendor
+      tags:
+        - Vendor Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Order ID
+          required: true
+          schema:
+            type: integer
+            example: 42
+      responses:
+        '200':
+          description: Order details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order details retrieved successfully
+                  data:
+                    $ref: '../schemas/order.yaml#/OrderDetailsResponse'
+        '400':
+          description: Invalid order ID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Not authorized to view this order
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to retrieve order details
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+    put:
+      summary: Update order status
+      description: |
+        Update the status of an order (vendor action).
+        Valid transitions:
+        - pending -> confirmed/cancelled
+        - confirmed -> preparing/cancelled
+        - preparing -> ready/cancelled
+        - ready -> driver_assigned/cancelled
+      tags:
+        - Vendor Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Order ID
+          required: true
+          schema:
+            type: integer
+            example: 42
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/order.yaml#/UpdateOrderStatusRequest'
+      responses:
+        '200':
+          description: Order status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order status updated successfully
+                  data:
+                    type: object
+                    properties:
+                      order_id:
+                        type: integer
+                        example: 42
+                      status:
+                        $ref: '../schemas/order.yaml#/OrderStatus'
+        '400':
+          description: Invalid status transition
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Not authorized to update this order
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to update order status
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  # Driver Order Endpoints
+  /api/driver/orders/available:
+    get:
+      summary: Get available orders
+      description: |
+        Retrieve orders that are available for driver assignment.
+        Returns orders with status 'ready', 'preparing', or 'confirmed' that have no driver assigned.
+        Orders are prioritized by status (ready first, then preparing, then confirmed) and by creation time (oldest first within each priority tier).
+      tags:
+        - Driver Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            default: 1
+            example: 1
+        - name: per_page
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+            example: 20
+      responses:
+        '200':
+          description: Available orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Available orders retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      orders:
+                        type: array
+                        description: |
+                          Array of orders available for driver assignment.
+                          Includes orders with status 'ready', 'preparing', or 'confirmed'.
+                          Sorted by priority (ready > preparing > confirmed) then by oldest first.
+                        items:
+                          $ref: '#/components/schemas/Order'
+                      page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 20
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Driver access required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to retrieve available orders
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/driver/orders:
+    get:
+      summary: Get driver's orders
+      description: Retrieve all orders assigned to the authenticated driver
+      tags:
+        - Driver Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            default: 1
+            example: 1
+        - name: per_page
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+            example: 20
+      responses:
+        '200':
+          description: Driver orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Driver orders retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      orders:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Order'
+                      page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 20
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Driver access required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Driver profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to retrieve driver orders
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/driver/orders/{id}:
+    get:
+      summary: Get driver order details
+      description: Retrieve detailed information about a specific order (must be assigned to driver or available)
+      tags:
+        - Driver Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Order ID
+          required: true
+          schema:
+            type: integer
+            example: 42
+      responses:
+        '200':
+          description: Order details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order details retrieved successfully
+                  data:
+                    $ref: '../schemas/order.yaml#/OrderDetailsResponse'
+        '400':
+          description: Invalid order ID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Not authorized to view this order
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to retrieve order details
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/driver/orders/{id}/assign:
+    post:
+      summary: Assign order to driver
+      description: |
+        Driver self-assigns to an available order.
+        Order must be in 'ready' status and not already assigned to another driver.
+        Automatically updates order status to 'driver_assigned'.
+      tags:
+        - Driver Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Order ID
+          required: true
+          schema:
+            type: integer
+            example: 42
+      responses:
+        '200':
+          description: Order assigned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order assigned successfully
+                  data:
+                    type: object
+                    properties:
+                      order_id:
+                        type: integer
+                        example: 42
+                      driver_id:
+                        type: integer
+                        example: 5
+                      status:
+                        type: string
+                        example: driver_assigned
+        '400':
+          description: Invalid order ID or order not available for assignment
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Driver access required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Driver profile or order not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to assign order
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/driver/orders/{id}/status:
+    put:
+      summary: Update driver order status
+      description: |
+        Update the status of an order assigned to the driver.
+        Valid transitions for drivers:
+        - driver_assigned -> picked_up
+        - picked_up -> in_transit
+        - in_transit -> delivered
+      tags:
+        - Driver Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Order ID
+          required: true
+          schema:
+            type: integer
+            example: 42
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/order.yaml#/UpdateOrderStatusRequest'
+      responses:
+        '200':
+          description: Order status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order status updated successfully
+                  data:
+                    type: object
+                    properties:
+                      order_id:
+                        type: integer
+                        example: 42
+                      status:
+                        $ref: '../schemas/order.yaml#/OrderStatus'
+        '400':
+          description: Invalid status transition or request body
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Not assigned to this order or driver access required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to update order status
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  # Admin Order Endpoints
+  /api/admin/orders:
+    get:
+      summary: Get all orders
+      description: Retrieve all orders with filtering and pagination (admin only)
+      tags:
+        - Admin Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by order status
+          required: false

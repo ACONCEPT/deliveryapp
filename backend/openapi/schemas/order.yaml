@@ -1,0 +1,439 @@
+    OrderStatus:
+      type: string
+      enum:
+        - cart
+        - pending
+        - confirmed
+        - preparing
+        - ready
+        - driver_assigned
+        - picked_up
+        - in_transit
+        - delivered
+        - cancelled
+        - refunded
+      example: pending
+      description: |
+        Order status values:
+        - cart: Order in shopping cart (not yet placed)
+        - pending: Order placed, awaiting restaurant confirmation
+        - confirmed: Restaurant confirmed order
+        - preparing: Restaurant preparing order
+        - ready: Order ready for pickup
+        - driver_assigned: Driver assigned to order
+        - picked_up: Driver picked up order
+        - in_transit: Order in delivery
+        - delivered: Order delivered to customer
+        - cancelled: Order cancelled
+        - refunded: Order refunded
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 42
+        customer_id:
+          type: integer
+          example: 1
+        restaurant_id:
+          type: integer
+          example: 1
+        delivery_address_id:
+          type: integer
+          nullable: true
+          example: 1
+        driver_id:
+          type: integer
+          nullable: true
+          example: 3
+        status:
+          $ref: './order.yaml#/OrderStatus'
+        subtotal_amount:
+          type: number
+          format: double
+          example: 35.97
+        tax_amount:
+          type: number
+          format: double
+          example: 3.06
+        delivery_fee:
+          type: number
+          format: double
+          example: 5.00
+        discount_amount:
+          type: number
+          format: double
+          example: 0.00
+        total_amount:
+          type: number
+          format: double
+          example: 44.03
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+        placed_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T10:30:00Z
+        confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T10:35:00Z
+        ready_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T11:00:00Z
+        delivered_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T11:30:00Z
+        cancelled_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T11:30:00Z
+        special_instructions:
+          type: string
+          nullable: true
+          example: Please ring doorbell
+        cancellation_reason:
+          type: string
+          nullable: true
+          example: Customer requested cancellation
+        estimated_preparation_time:
+          type: integer
+          nullable: true
+          description: Estimated preparation time in minutes
+          example: 25
+        estimated_delivery_time:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T11:25:00Z
+        is_active:
+          type: boolean
+          example: true
+
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        order_id:
+          type: integer
+          example: 42
+        menu_item_name:
+          type: string
+          example: Margherita Pizza
+        menu_item_description:
+          type: string
+          nullable: true
+          example: Fresh mozzarella, tomato sauce, basil
+        price_at_time:
+          type: number
+          format: double
+          description: Price when order was placed (not current menu price)
+          example: 12.99
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+        customizations:
+          type: object
+          description: JSONB customizations (stored as JSON)
+          example:
+            size: large
+            toppings: [extra cheese, mushrooms]
+            notes: Well done
+        line_total:
+          type: number
+          format: double
+          description: price_at_time * quantity
+          example: 25.98
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    OrderStatusHistory:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        order_id:
+          type: integer
+          example: 42
+        user_id:
+          type: integer
+          nullable: true
+          description: User who performed the status change
+          example: 2
+        from_status:
+          type: string
+          nullable: true
+          example: pending
+        to_status:
+          type: string
+          example: confirmed
+        notes:
+          type: string
+          nullable: true
+          example: Estimated prep time 25 minutes
+        metadata:
+          type: object
+          nullable: true
+          description: JSONB metadata (stored as JSON)
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:35:00Z
+
+    CreateOrderRequest:
+      type: object
+      required:
+        - restaurant_id
+        - delivery_address_id
+        - items
+      properties:
+        restaurant_id:
+          type: integer
+          example: 1
+        delivery_address_id:
+          type: integer
+          example: 1
+        special_instructions:
+          type: string
+          maxLength: 500
+          example: Please ring doorbell
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CreateOrderItemRequest'
+
+    CreateOrderItemRequest:
+      type: object
+      required:
+        - menu_item_name
+        - price
+        - quantity
+      properties:
+        menu_item_name:
+          type: string
+          example: Margherita Pizza
+        menu_item_description:
+          type: string
+          example: Fresh mozzarella, tomato sauce, basil
+        price:
+          type: number
+          format: double
+          minimum: 0.01
+          example: 12.99
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+        customizations:
+          type: object
+          example:
+            size: large
+            toppings: [extra cheese, mushrooms]
+
+    UpdateOrderStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: './order.yaml#/OrderStatus'
+        notes:
+          type: string
+          maxLength: 500
+          example: Estimated prep time 25 minutes
+        estimated_preparation_time:
+          type: integer
+          minimum: 1
+          description: Estimated preparation time in minutes (only when confirming order)
+          example: 25
+
+    CancelOrderRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          example: Customer changed their mind
+
+    OrderDetailsResponse:
+      type: object
+      properties:
+        order:
+          $ref: '#/components/schemas/Order'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        status_history:
+          type: array
+          items:
+            $ref: './order.yaml#/OrderStatusHistory'
+        restaurant:
+          $ref: '#/components/schemas/RestaurantInfo'
+        delivery_address:
+          $ref: '#/components/schemas/CustomerAddress'
+        customer:
+          $ref: '#/components/schemas/CustomerInfo'
+        driver:
+          $ref: '#/components/schemas/DriverInfo'
+
+    OrderListResponse:
+      type: object
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderSummary'
+        total_count:
+          type: integer
+          example: 150
+        page:
+          type: integer
+          example: 1
+        per_page:
+          type: integer
+          example: 20
+
+    OrderSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 42
+        customer_id:
+          type: integer
+          example: 1
+        restaurant_id:
+          type: integer
+          example: 1
+        restaurant_name:
+          type: string
+          example: Pizza Palace
+        status:
+          $ref: './order.yaml#/OrderStatus'
+        total_amount:
+          type: number
+          format: double
+          example: 44.03
+        item_count:
+          type: integer
+          description: Total number of items in order
+          example: 3
+        placed_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T10:30:00Z
+        estimated_delivery_time:
+          type: string
+          format: date-time
+          nullable: true
+          example: 2024-01-15T11:25:00Z
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+
+    OrderStats:
+      type: object
+      properties:
+        total_orders:
+          type: integer
+          description: Total number of orders
+          example: 150
+        pending_orders:
+          type: integer
+          description: Number of pending orders
+          example: 15
+        confirmed_orders:
+          type: integer
+          description: Number of confirmed orders
+          example: 8
+        delivered_orders:
+          type: integer
+          description: Number of delivered orders
+          example: 100
+        cancelled_orders:
+          type: integer
+          description: Number of cancelled orders
+          example: 3
+        total_revenue:
+          type: number
+          format: double
+          description: Total revenue from delivered orders
+          example: 4532.50
+        average_order_value:
+          type: number
+          format: double
+          description: Average value of delivered orders
+          example: 45.33
+
+    RestaurantInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Pizza Palace
+        phone:
+          type: string
+          example: "+1234567891"
+        address:
+          type: string
+          example: 123 Main St, New York, NY 10001
+
+    CustomerInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        full_name:
+          type: string
+          example: John Doe
+        phone:
+          type: string
+          example: "+1234567890"
+
+    DriverInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 3
+        full_name:
+          type: string
+          example: Jane Smith
+        phone:
+          type: string
+          example: "+1234567892"
+        vehicle_type:
+          type: string
+          example: Car

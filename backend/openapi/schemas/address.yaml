@@ -1,0 +1,135 @@
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        customer_id:
+          type: integer
+          example: 1
+        address_line1:
+          type: string
+          example: 123 Main St
+        address_line2:
+          type: string
+          nullable: true
+          example: Apt 4B
+        city:
+          type: string
+          example: New York
+        state:
+          type: string
+          nullable: true
+          example: NY
+        postal_code:
+          type: string
+          nullable: true
+          example: "10001"
+        country:
+          type: string
+          example: USA
+        latitude:
+          type: number
+          format: double
+          nullable: true
+          example: 40.7128
+        longitude:
+          type: number
+          format: double
+          nullable: true
+          example: -74.0060
+        is_default:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateAddressRequest:
+      type: object
+      required:
+        - address_line1
+        - city
+        - country
+      properties:
+        address_line1:
+          type: string
+          example: 123 Main St
+        address_line2:
+          type: string
+          nullable: true
+          example: Apt 4B
+        city:
+          type: string
+          example: New York
+        state:
+          type: string
+          nullable: true
+          example: NY
+        postal_code:
+          type: string
+          nullable: true
+          example: "10001"
+        country:
+          type: string
+          example: USA
+        latitude:
+          type: number
+          format: double
+          nullable: true
+          example: 40.7128
+        longitude:
+          type: number
+          format: double
+          nullable: true
+          example: -74.0060
+        is_default:
+          type: boolean
+          example: false
+
+    UpdateAddressRequest:
+      type: object
+      properties:
+        address_line1:
+          type: string
+          nullable: true
+          example: 456 Oak Ave
+        address_line2:
+          type: string
+          nullable: true
+          example: Suite 200
+        city:
+          type: string
+          nullable: true
+          example: Brooklyn
+        state:
+          type: string
+          nullable: true
+          example: NY
+        postal_code:
+          type: string
+          nullable: true
+          example: "11201"
+        country:
+          type: string
+          nullable: true
+          example: USA
+        latitude:
+          type: number
+          format: double
+          nullable: true
+          example: 40.6782
+        longitude:
+          type: number
+          format: double
+          nullable: true
+          example: -73.9442
+        is_default:
+          type: boolean
+          nullable: true
+          example: true
+
+    ErrorResponse:
+      type: object
