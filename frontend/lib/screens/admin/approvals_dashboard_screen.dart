@@ -4,6 +4,7 @@ import '../../services/approval_service.dart';
 import '../../config/dashboard_constants.dart';
 import 'pending_vendors_screen.dart';
 import 'pending_restaurants_screen.dart';
+import 'pending_drivers_screen.dart';
 
 /// Admin Approvals Dashboard Screen
 ///
@@ -81,6 +82,19 @@ class _ApprovalsDashboardScreenState extends State<ApprovalsDashboardScreen> {
     });
   }
 
+  /// Navigates to pending drivers list
+  void _navigateToPendingDrivers() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PendingDriversScreen(token: widget.token),
+      ),
+    ).then((_) {
+      // Reload stats when returning from driver list
+      _loadDashboardStats();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -142,107 +156,19 @@ class _ApprovalsDashboardScreenState extends State<ApprovalsDashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Summary section
-            _buildSummaryCard(),
+            // Overview section (formerly Statistics)
+            _buildSectionHeader('Overview', Icons.analytics),
+            const SizedBox(height: 12),
+            _buildStatisticsCards(),
             const SizedBox(height: DashboardConstants.sectionSpacing),
 
             // Pending approvals section
             _buildSectionHeader('Pending Approvals', Icons.pending_actions),
             const SizedBox(height: 12),
             _buildPendingCards(),
-            const SizedBox(height: DashboardConstants.sectionSpacing),
-
-            // Statistics section
-            _buildSectionHeader('Statistics', Icons.analytics),
-            const SizedBox(height: 12),
-            _buildStatisticsCards(),
           ],
         ),
       ),
-    );
-  }
-
-  /// Builds summary card with total counts
-  Widget _buildSummaryCard() {
-    return Card(
-      elevation: DashboardConstants.cardElevation,
-      child: Padding(
-        padding: const EdgeInsets.all(DashboardConstants.cardPadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.dashboard, size: 28, color: Colors.red),
-                const SizedBox(width: 12),
-                const Text(
-                  'Overview',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildSummaryItem(
-                    'Total Pending',
-                    _stats!.totalPending,
-                    Colors.orange,
-                    Icons.hourglass_empty,
-                  ),
-                ),
-                Expanded(
-                  child: _buildSummaryItem(
-                    'Total Approved',
-                    _stats!.totalApproved,
-                    Colors.green,
-                    Icons.check_circle,
-                  ),
-                ),
-                Expanded(
-                  child: _buildSummaryItem(
-                    'Total Rejected',
-                    _stats!.totalRejected,
-                    Colors.red,
-                    Icons.cancel,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Builds summary item with count and icon
-  Widget _buildSummaryItem(String label, int count, Color color, IconData icon) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 32),
-        const SizedBox(height: 8),
-        Text(
-          count.toString(),
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Colors.grey,
-          ),
-        ),
-      ],
     );
   }
 
@@ -265,26 +191,46 @@ class _ApprovalsDashboardScreenState extends State<ApprovalsDashboardScreen> {
 
   /// Builds pending approval action cards
   Widget _buildPendingCards() {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: _buildActionCard(
-            'Pending Vendors',
-            _stats!.pendingVendors,
-            Icons.store,
-            Colors.deepOrange,
-            _navigateToPendingVendors,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _buildActionCard(
+                'Pending Vendors',
+                _stats!.pendingVendors,
+                Icons.store,
+                Colors.deepOrange,
+                _navigateToPendingVendors,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildActionCard(
+                'Pending Restaurants',
+                _stats!.pendingRestaurants,
+                Icons.restaurant,
+                Colors.orange,
+                _navigateToPendingRestaurants,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildActionCard(
-            'Pending Restaurants',
-            _stats!.pendingRestaurants,
-            Icons.restaurant,
-            Colors.orange,
-            _navigateToPendingRestaurants,
-          ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _buildActionCard(
+                'Pending Drivers',
+                _stats!.pendingDrivers,
+                Icons.local_shipping,
+                Colors.purple,
+                _navigateToPendingDrivers,
+              ),
+            ),
+            const SizedBox(width: 16),
+            const Expanded(child: SizedBox()), // Empty space for alignment
+          ],
         ),
       ],
     );
@@ -294,6 +240,7 @@ class _ApprovalsDashboardScreenState extends State<ApprovalsDashboardScreen> {
   Widget _buildStatisticsCards() {
     return Column(
       children: [
+        // Approved items
         Row(
           children: [
             Expanded(
@@ -313,9 +260,19 @@ class _ApprovalsDashboardScreenState extends State<ApprovalsDashboardScreen> {
                 Colors.green,
               ),
             ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildStatCard(
+                'Approved Drivers',
+                _stats!.approvedDrivers,
+                Icons.local_shipping_outlined,
+                Colors.green,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 16),
+        // Rejected items
         Row(
           children: [
             Expanded(
@@ -332,6 +289,15 @@ class _ApprovalsDashboardScreenState extends State<ApprovalsDashboardScreen> {
                 'Rejected Restaurants',
                 _stats!.rejectedRestaurants,
                 Icons.restaurant_outlined,
+                Colors.red,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildStatCard(
+                'Rejected Drivers',
+                _stats!.rejectedDrivers,
+                Icons.local_shipping_outlined,
                 Colors.red,
               ),
             ),

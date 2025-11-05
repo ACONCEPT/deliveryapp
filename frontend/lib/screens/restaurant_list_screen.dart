@@ -31,8 +31,10 @@ class RestaurantListScreen extends StatelessWidget {
 
     return PaginatedListScreen<Restaurant>(
       title: 'Restaurants',
-      loadItems: () => restaurantService.getRestaurants(token),
-      itemBuilder: (context, restaurant) => Padding(
+      token: token,
+      appBarColor: Colors.blue,
+      loadItems: (token) => restaurantService.getRestaurants(token!),
+      itemBuilder: (restaurant, index) => Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: RestaurantCard(
           restaurant: restaurant,
@@ -41,9 +43,8 @@ class RestaurantListScreen extends StatelessWidget {
       ),
       emptyIcon: Icons.restaurant_menu,
       emptyTitle: 'No restaurants available',
-      emptySubtitle: 'Check back later for new restaurants',
+      emptyMessage: 'Check back later for new restaurants',
       enableSearch: false,
-      appBarColor: Colors.blue,
     );
   }
 }

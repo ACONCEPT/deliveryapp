@@ -73,20 +73,24 @@ type Vendor struct {
 
 // Driver represents a delivery driver profile
 type Driver struct {
-	ID               int       `json:"id" db:"id"`
-	UserID           int       `json:"user_id" db:"user_id"`
-	FullName         string    `json:"full_name" db:"full_name"`
-	Phone            string    `json:"phone" db:"phone"`
-	VehicleType      *string   `json:"vehicle_type,omitempty" db:"vehicle_type"`
-	VehiclePlate     *string   `json:"vehicle_plate,omitempty" db:"vehicle_plate"`
-	LicenseNumber    *string   `json:"license_number,omitempty" db:"license_number"`
-	IsAvailable      bool      `json:"is_available" db:"is_available"`
-	CurrentLatitude  *float64  `json:"current_latitude,omitempty" db:"current_latitude"`
-	CurrentLongitude *float64  `json:"current_longitude,omitempty" db:"current_longitude"`
-	Rating           float64   `json:"rating" db:"rating"`
-	TotalDeliveries  int       `json:"total_deliveries" db:"total_deliveries"`
-	CreatedAt        time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at" db:"updated_at"`
+	ID                int        `json:"id" db:"id"`
+	UserID            int        `json:"user_id" db:"user_id"`
+	FullName          string     `json:"full_name" db:"full_name"`
+	Phone             string     `json:"phone" db:"phone"`
+	VehicleType       *string    `json:"vehicle_type,omitempty" db:"vehicle_type"`
+	VehiclePlate      *string    `json:"vehicle_plate,omitempty" db:"vehicle_plate"`
+	LicenseNumber     *string    `json:"license_number,omitempty" db:"license_number"`
+	IsAvailable       bool       `json:"is_available" db:"is_available"`
+	CurrentLatitude   *float64   `json:"current_latitude,omitempty" db:"current_latitude"`
+	CurrentLongitude  *float64   `json:"current_longitude,omitempty" db:"current_longitude"`
+	Rating            float64    `json:"rating" db:"rating"`
+	TotalDeliveries   int        `json:"total_deliveries" db:"total_deliveries"`
+	ApprovalStatus    string     `json:"approval_status" db:"approval_status"`
+	ApprovedByAdminID *int       `json:"approved_by_admin_id,omitempty" db:"approved_by_admin_id"`
+	ApprovedAt        *time.Time `json:"approved_at,omitempty" db:"approved_at"`
+	RejectionReason   *string    `json:"rejection_reason,omitempty" db:"rejection_reason"`
+	CreatedAt         time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at" db:"updated_at"`
 }
 
 // Admin represents an admin profile
@@ -161,6 +165,7 @@ type CustomerAddress struct {
 	Country      string    `json:"country" db:"country"`
 	Latitude     *float64  `json:"latitude,omitempty" db:"latitude"`
 	Longitude    *float64  `json:"longitude,omitempty" db:"longitude"`
+	Timezone     *string   `json:"timezone,omitempty" db:"timezone"`
 	IsDefault    bool      `json:"is_default" db:"is_default"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
@@ -176,6 +181,7 @@ type CreateAddressRequest struct {
 	Country      string   `json:"country" validate:"required"`
 	Latitude     *float64 `json:"latitude,omitempty"`
 	Longitude    *float64 `json:"longitude,omitempty"`
+	Timezone     *string  `json:"timezone,omitempty"`
 	IsDefault    bool     `json:"is_default"`
 }
 
@@ -189,5 +195,27 @@ type UpdateAddressRequest struct {
 	Country      *string  `json:"country,omitempty"`
 	Latitude     *float64 `json:"latitude,omitempty"`
 	Longitude    *float64 `json:"longitude,omitempty"`
+	Timezone     *string  `json:"timezone,omitempty"`
 	IsDefault    *bool    `json:"is_default,omitempty"`
+}
+
+// UserWithProfile represents a user with their type-specific profile
+type UserWithProfile struct {
+	ID        int         `json:"id"`
+	Username  string      `json:"username"`
+	Email     string      `json:"email"`
+	UserType  UserType    `json:"user_type"`
+	Status    UserStatus  `json:"status"`
+	CreatedAt time.Time   `json:"created_at"`
+	UpdatedAt time.Time   `json:"updated_at"`
+	Profile   interface{} `json:"profile"`
+}
+
+// GetAllUsersResponse represents the paginated response for listing users
+type GetAllUsersResponse struct {
+	Users      []UserWithProfile `json:"users"`
+	TotalCount int               `json:"total_count"`
+	Page       int               `json:"page"`
+	PerPage    int               `json:"per_page"`
+	TotalPages int               `json:"total_pages"`
 }

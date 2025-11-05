@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../models/order.dart';
 import '../../models/address.dart';
+import '../../models/distance.dart';
 import '../../services/order_service.dart';
 import '../../services/address_service.dart';
+import '../../services/distance_service.dart';
 import '../../config/dashboard_constants.dart';
 import '../../widgets/order/order_status_badge.dart';
 import '../../widgets/order/order_timeline.dart';
@@ -28,11 +30,14 @@ class _CustomerOrderDetailScreenState
     extends State<CustomerOrderDetailScreen> {
   final OrderService _orderService = OrderService();
   final AddressService _addressService = AddressService();
+  final DistanceService _distanceService = DistanceService();
 
   Order? _order;
   Address? _deliveryAddress;
+  DistanceEstimate? _distanceEstimate;
   bool _isLoading = false;
   bool _isCancelling = false;
+  bool _isLoadingDistance = false;
   String? _errorMessage;
 
   @override
@@ -71,6 +76,11 @@ class _CustomerOrderDetailScreenState
         _deliveryAddress = address;
         _isLoading = false;
       });
+
+      // Load distance estimate after order details are loaded
+      if (order.deliveryAddressId != null) {
+        _loadDistanceEstimate();
+      }
     } catch (e, stackTrace) {
       setState(() {
         // Capture full error details including stack trace
@@ -89,6 +99,50 @@ If this is a parsing error, please check the backend response format in the brow
       // Also log to console for debugging
       print('❌ Error loading order ${widget.orderId}: $e');
       print('Stack trace: $stackTrace');
+    }
+  }
+
+  /// Load distance estimate for the order
+  Future<void> _loadDistanceEstimate() async {
+    if (_order?.deliveryAddressId == null) {
+      print('⚠️ No delivery address for order, skipping distance calculation');
+      return;
+    }
+
+    setState(() {
+      _isLoadingDistance = true;
+    });
+
+    try {
+      print(
+          '📍 Fetching distance estimate: address=${_order!.deliveryAddressId}, restaurant=${_order!.restaurantId}');
+
+      final estimate = await _distanceService.calculateDistanceSafe(
+        token: widget.token,
+        addressId: _order!.deliveryAddressId!,
+        restaurantId: _order!.restaurantId,
+      );
+
+      if (mounted) {
+        setState(() {
+          _distanceEstimate = estimate;
+          _isLoadingDistance = false;
+        });
+
+        if (estimate != null) {
+          print(
+              '✅ Distance estimate loaded: ${estimate.distance.miles} miles, ${estimate.duration.text}');
+        } else {
+          print('⚠️ Distance estimate unavailable (coordinates missing?)');
+        }
+      }
+    } catch (e) {
+      print('❌ Failed to load distance estimate: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingDistance = false;
+        });
+      }
     }
   }
 
@@ -359,6 +413,14 @@ If this is a parsing error, please check the backend response format in the brow
   }
 
   Widget _buildOrderStatusCard() {
+    // Calculate estimated delivery text based on distance or order field
+    String? estimatedTimeText;
+    if (_distanceEstimate != null) {
+      estimatedTimeText = _distanceEstimate!.formattedDeliveryTimeRange();
+    } else if (_order!.estimatedDeliveryTime != null) {
+      estimatedTimeText = _formatEstimatedTime(_order!.estimatedDeliveryTime!);
+    }
+
     return Card(
       elevation: DashboardConstants.cardElevation,
       shape: RoundedRectangleBorder(
@@ -382,28 +444,102 @@ If this is a parsing error, please check the backend response format in the brow
                 OrderStatusBadge(status: _order!.status, fontSize: 14),
               ],
             ),
-            if (_order!.estimatedDeliveryTime != null) ...[
+            if (estimatedTimeText != null || _isLoadingDistance) ...[
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Icon(Icons.access_time, color: Colors.blue.shade700),
+                  _isLoadingDistance
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.blue.shade700,
+                          ),
+                        )
+                      : Icon(Icons.access_time, color: Colors.blue.shade700),
                   const SizedBox(width: 8),
-                  Text(
-                    'Estimated Delivery: ${_formatEstimatedTime(_order!.estimatedDeliveryTime!)}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.blue.shade700,
-                      fontWeight: FontWeight.w500,
+                  Expanded(
+                    child: Text(
+                      _isLoadingDistance
+                          ? 'Calculating delivery time...'
+                          : 'Estimated Delivery: $estimatedTimeText',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.blue.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ],
               ),
             ],
+            // Show distance details if available
+            if (_distanceEstimate != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildDistanceInfoItem(
+                      icon: Icons.straighten,
+                      label: 'Distance',
+                      value:
+                          '${_distanceEstimate!.distance.miles.toStringAsFixed(1)} mi',
+                    ),
+                    Container(
+                      width: 1,
+                      height: 30,
+                      color: Colors.blue.shade200,
+                    ),
+                    _buildDistanceInfoItem(
+                      icon: Icons.directions_car,
+                      label: 'Drive Time',
+                      value: _distanceEstimate!.duration.text,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildDistanceInfoItem({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Column(
+      children: [
+        Icon(icon, size: 18, color: Colors.blue.shade700),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: Colors.grey.shade600,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.blue.shade900,
+          ),
+        ),
+      ],
     );
   }
 

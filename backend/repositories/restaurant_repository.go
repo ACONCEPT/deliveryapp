@@ -30,6 +30,10 @@ type RestaurantRepository interface {
 	// Ownership verification methods
 	VerifyVendorOwnership(restaurantID, vendorID int) error
 	GetByIDWithOwnershipCheck(restaurantID, vendorID int) (*models.Restaurant, error)
+
+	// Vendor settings methods
+	UpdateRestaurantSettings(restaurantID int, hoursOfOperation *string, avgPrepTime *int) error
+	UpdateRestaurantPrepTime(restaurantID int, avgPrepTime int) error
 }
 
 // restaurantRepository implements the RestaurantRepository interface
@@ -44,18 +48,24 @@ func NewRestaurantRepository(db *sqlx.DB) RestaurantRepository {
 
 // Create inserts a new restaurant into the database
 func (r *restaurantRepository) Create(restaurant *models.Restaurant) error {
+	// Default timezone to UTC if not specified
+	if restaurant.Timezone == "" {
+		restaurant.Timezone = "UTC"
+	}
+
 	query := r.DB.Rebind(`
 		INSERT INTO restaurants (name, description, phone, address_line1, address_line2,
 		                        city, state, postal_code, country, latitude, longitude,
-		                        hours_of_operation, is_active)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		                        hours_of_operation, average_prep_time_minutes, timezone, is_active)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING id, name, description, phone, address_line1, address_line2, city, state,
-		          postal_code, country, latitude, longitude, hours_of_operation, is_active,
-		          rating, total_orders, approval_status, approved_by_admin_id, approved_at,
-		          rejection_reason, created_at, updated_at
+		          postal_code, country, latitude, longitude, hours_of_operation,
+		          average_prep_time_minutes, timezone, is_active, rating, total_orders,
+		          approval_status, approved_by_admin_id, approved_at, rejection_reason,
+		          created_at, updated_at
 	`)
 
-	args := []interface{}{
+	err := r.DB.QueryRowx(query,
 		restaurant.Name,
 		restaurant.Description,
 		restaurant.Phone,
@@ -68,10 +78,16 @@ func (r *restaurantRepository) Create(restaurant *models.Restaurant) error {
 		restaurant.Latitude,
 		restaurant.Longitude,
 		restaurant.HoursOfOperation,
-		restaurant.IsActive, // is_active from parameter
+		restaurant.AveragePrepTimeMin,
+		restaurant.Timezone,
+		restaurant.IsActive,
+	).StructScan(restaurant)
+
+	if err != nil {
+		return fmt.Errorf("failed to create restaurant: %w", err)
 	}
 
-	return GetData(r.DB, query, restaurant, args)
+	return nil
 }
 
 // GetByID retrieves a restaurant by ID
@@ -95,7 +111,7 @@ func (r *restaurantRepository) GetAll() ([]models.Restaurant, error) {
 	restaurants := make([]models.Restaurant, 0)
 	query := `SELECT * FROM restaurants ORDER BY name ASC`
 
-	err := SelectData(r.DB, query, &restaurants, []interface{}{})
+	err := r.DB.Select(&restaurants, query)
 	if err != nil {
 		return restaurants, fmt.Errorf("failed to get restaurants: %w", err)
 	}
@@ -114,7 +130,7 @@ func (r *restaurantRepository) GetByVendorID(vendorID int) ([]models.Restaurant,
 		ORDER BY r.name ASC
 	`)
 
-	err := SelectData(r.DB, query, &restaurants, []interface{}{vendorID})
+	err := r.DB.Select(&restaurants, query, vendorID)
 	if err != nil {
 		return restaurants, fmt.Errorf("failed to get restaurants by vendor: %w", err)
 	}
@@ -133,7 +149,7 @@ func (r *restaurantRepository) GetWithVendorInfo() ([]models.RestaurantWithVendo
 		ORDER BY r.name ASC
 	`
 
-	err := SelectData(r.DB, query, &restaurants, []interface{}{})
+	err := r.DB.Select(&restaurants, query)
 	if err != nil {
 		return restaurants, fmt.Errorf("failed to get restaurants with vendor info: %w", err)
 	}
@@ -147,15 +163,17 @@ func (r *restaurantRepository) Update(restaurant *models.Restaurant) error {
 		UPDATE restaurants
 		SET name = ?, description = ?, phone = ?, address_line1 = ?, address_line2 = ?,
 		    city = ?, state = ?, postal_code = ?, country = ?, latitude = ?, longitude = ?,
-		    hours_of_operation = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
+		    hours_of_operation = ?, average_prep_time_minutes = ?, is_active = ?,
+		    updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 		RETURNING id, name, description, phone, address_line1, address_line2, city, state,
-		          postal_code, country, latitude, longitude, hours_of_operation, is_active,
-		          rating, total_orders, approval_status, approved_by_admin_id, approved_at,
-		          rejection_reason, created_at, updated_at
+		          postal_code, country, latitude, longitude, hours_of_operation,
+		          average_prep_time_minutes, is_active, rating, total_orders,
+		          approval_status, approved_by_admin_id, approved_at, rejection_reason,
+		          created_at, updated_at
 	`)
 
-	args := []interface{}{
+	err := r.DB.QueryRowx(query,
 		restaurant.Name,
 		restaurant.Description,
 		restaurant.Phone,
@@ -168,19 +186,23 @@ func (r *restaurantRepository) Update(restaurant *models.Restaurant) error {
 		restaurant.Latitude,
 		restaurant.Longitude,
 		restaurant.HoursOfOperation,
+		restaurant.AveragePrepTimeMin,
 		restaurant.IsActive,
 		restaurant.ID,
+	).StructScan(restaurant)
+
+	if err != nil {
+		return fmt.Errorf("failed to update restaurant: %w", err)
 	}
 
-	return GetData(r.DB, query, restaurant, args)
+	return nil
 }
 
 // Delete deletes a restaurant by ID
 func (r *restaurantRepository) Delete(id int) error {
 	query := r.DB.Rebind(`DELETE FROM restaurants WHERE id = ?`)
-	args := []interface{}{id}
 
-	result, err := ExecuteStatement(r.DB, query, args)
+	result, err := r.DB.Exec(query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete restaurant: %w", err)
 	}
@@ -206,7 +228,7 @@ func (r *restaurantRepository) GetPendingRestaurants() ([]models.Restaurant, err
 		ORDER BY created_at ASC
 	`
 
-	err := SelectData(r.DB, query, &restaurants, []interface{}{})
+	err := r.DB.Select(&restaurants, query)
 	if err != nil {
 		return restaurants, fmt.Errorf("failed to get pending restaurants: %w", err)
 	}
@@ -223,7 +245,7 @@ func (r *restaurantRepository) GetApprovedRestaurants() ([]models.Restaurant, er
 		ORDER BY name ASC
 	`
 
-	err := SelectData(r.DB, query, &restaurants, []interface{}{})
+	err := r.DB.Select(&restaurants, query)
 	if err != nil {
 		return restaurants, fmt.Errorf("failed to get approved restaurants: %w", err)
 	}
@@ -245,9 +267,7 @@ func (r *restaurantRepository) ApproveRestaurant(restaurantID, adminID int) erro
 		WHERE id = ?
 	`)
 
-	args := []interface{}{adminID, restaurantID}
-
-	result, err := ExecuteStatement(r.DB, query, args)
+	result, err := r.DB.Exec(query, adminID, restaurantID)
 	if err != nil {
 		return fmt.Errorf("failed to approve restaurant: %w", err)
 	}
@@ -278,9 +298,7 @@ func (r *restaurantRepository) RejectRestaurant(restaurantID, adminID int, reaso
 		WHERE id = ?
 	`)
 
-	args := []interface{}{adminID, reason, restaurantID}
-
-	result, err := ExecuteStatement(r.DB, query, args)
+	result, err := r.DB.Exec(query, adminID, reason, restaurantID)
 	if err != nil {
 		return fmt.Errorf("failed to reject restaurant: %w", err)
 	}
@@ -299,53 +317,57 @@ func (r *restaurantRepository) RejectRestaurant(restaurantID, adminID int, reaso
 
 // CreateWithVendor creates a restaurant and vendor relationship in a transaction
 func (r *restaurantRepository) CreateWithVendor(restaurant *models.Restaurant, vendorID int) error {
-	return WithTransaction(r.DB, func(tx *sqlx.Tx) error {
-		// Create the restaurant
-		query := tx.Rebind(`
-			INSERT INTO restaurants (name, description, phone, address_line1, address_line2,
-			                        city, state, postal_code, country, latitude, longitude,
-			                        hours_of_operation, is_active)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			RETURNING id, name, description, phone, address_line1, address_line2, city, state,
-			          postal_code, country, latitude, longitude, hours_of_operation, is_active,
-			          rating, total_orders, approval_status, approved_by_admin_id, approved_at,
-			          rejection_reason, created_at, updated_at
-		`)
+	tx, err := r.DB.Beginx()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
 
-		args := []interface{}{
-			restaurant.Name,
-			restaurant.Description,
-			restaurant.Phone,
-			restaurant.AddressLine1,
-			restaurant.AddressLine2,
-			restaurant.City,
-			restaurant.State,
-			restaurant.PostalCode,
-			restaurant.Country,
-			restaurant.Latitude,
-			restaurant.Longitude,
-			restaurant.HoursOfOperation,
-			restaurant.IsActive,
-		}
+	// Create the restaurant
+	query := tx.Rebind(`
+		INSERT INTO restaurants (name, description, phone, address_line1, address_line2,
+		                        city, state, postal_code, country, latitude, longitude,
+		                        hours_of_operation, average_prep_time_minutes, is_active)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		RETURNING id, name, description, phone, address_line1, address_line2, city, state,
+		          postal_code, country, latitude, longitude, hours_of_operation,
+		          average_prep_time_minutes, is_active, rating, total_orders,
+		          approval_status, approved_by_admin_id, approved_at, rejection_reason,
+		          created_at, updated_at
+	`)
 
-		err := tx.QueryRowx(query, args...).StructScan(restaurant)
-		if err != nil {
-			return fmt.Errorf("failed to create restaurant: %w", err)
-		}
+	err = tx.QueryRowx(query,
+		restaurant.Name,
+		restaurant.Description,
+		restaurant.Phone,
+		restaurant.AddressLine1,
+		restaurant.AddressLine2,
+		restaurant.City,
+		restaurant.State,
+		restaurant.PostalCode,
+		restaurant.Country,
+		restaurant.Latitude,
+		restaurant.Longitude,
+		restaurant.HoursOfOperation,
+		restaurant.AveragePrepTimeMin,
+		restaurant.IsActive,
+	).StructScan(restaurant)
+	if err != nil {
+		return fmt.Errorf("failed to create restaurant: %w", err)
+	}
 
-		// Create vendor-restaurant relationship
-		vrQuery := tx.Rebind(`
-			INSERT INTO vendor_restaurants (vendor_id, restaurant_id)
-			VALUES (?, ?)
-		`)
+	// Create vendor-restaurant relationship
+	vrQuery := tx.Rebind(`
+		INSERT INTO vendor_restaurants (vendor_id, restaurant_id)
+		VALUES (?, ?)
+	`)
 
-		_, err = tx.Exec(vrQuery, vendorID, restaurant.ID)
-		if err != nil {
-			return fmt.Errorf("failed to create vendor-restaurant relationship: %w", err)
-		}
+	_, err = tx.Exec(vrQuery, vendorID, restaurant.ID)
+	if err != nil {
+		return fmt.Errorf("failed to create vendor-restaurant relationship: %w", err)
+	}
 
-		return nil
-	})
+	return tx.Commit()
 }
 
 // VerifyVendorOwnership checks if a restaurant belongs to a vendor
@@ -377,4 +399,93 @@ func (r *restaurantRepository) GetByIDWithOwnershipCheck(restaurantID, vendorID 
 
 	// Then get the restaurant
 	return r.GetByID(restaurantID)
+}
+
+// UpdateRestaurantSettings updates restaurant hours of operation and/or average prep time
+func (r *restaurantRepository) UpdateRestaurantSettings(restaurantID int, hoursOfOperation *string, avgPrepTime *int) error {
+	// Build dynamic query based on what's being updated
+	updates := []string{}
+	args := []interface{}{}
+
+	if hoursOfOperation != nil {
+		updates = append(updates, "hours_of_operation = ?")
+		args = append(args, *hoursOfOperation)
+	}
+
+	if avgPrepTime != nil {
+		updates = append(updates, "average_prep_time_minutes = ?")
+		args = append(args, *avgPrepTime)
+	}
+
+	if len(updates) == 0 {
+		return fmt.Errorf("no fields to update")
+	}
+
+	// Add updated_at timestamp
+	updates = append(updates, "updated_at = CURRENT_TIMESTAMP")
+
+	// Add restaurant ID to args
+	args = append(args, restaurantID)
+
+	query := fmt.Sprintf(`
+		UPDATE restaurants
+		SET %s
+		WHERE id = ?
+	`, joinStrings(updates, ", "))
+
+	query = r.DB.Rebind(query)
+
+	result, err := r.DB.Exec(query, args...)
+	if err != nil {
+		return fmt.Errorf("failed to update restaurant settings: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("restaurant not found")
+	}
+
+	return nil
+}
+
+// UpdateRestaurantPrepTime updates only the average prep time for a restaurant
+func (r *restaurantRepository) UpdateRestaurantPrepTime(restaurantID int, avgPrepTime int) error {
+	query := r.DB.Rebind(`
+		UPDATE restaurants
+		SET average_prep_time_minutes = ?,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`)
+
+	result, err := r.DB.Exec(query, avgPrepTime, restaurantID)
+	if err != nil {
+		return fmt.Errorf("failed to update prep time: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("restaurant not found")
+	}
+
+	return nil
+}
+
+// joinStrings is a helper function to join strings with a separator
+func joinStrings(strs []string, sep string) string {
+	if len(strs) == 0 {
+		return ""
+	}
+	result := strs[0]
+	for i := 1; i < len(strs); i++ {
+		result += sep + strs[i]
+	}
+	return result
 }

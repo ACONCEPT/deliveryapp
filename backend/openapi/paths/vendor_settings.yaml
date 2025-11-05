@@ -1,0 +1,533 @@
+# Vendor Restaurant Settings Endpoints
+
+/api/vendor/restaurant/{restaurantId}/settings:
+  get:
+    summary: Get restaurant settings
+    description: |
+      Retrieve restaurant settings including hours of operation and average prep time.
+
+      **Authorization**:
+      - **Vendors**: Can only access settings for restaurants they own
+      - **Admins**: Can access settings for ANY restaurant
+
+      **Response includes**:
+      - Restaurant ID and name
+      - Average preparation time in minutes
+      - Weekly hours of operation (if configured)
+    tags:
+      - Vendor
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: restaurantId
+        in: path
+        description: Restaurant ID
+        required: true
+        schema:
+          type: integer
+          example: 1
+    responses:
+      '200':
+        description: Restaurant settings retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                data:
+                  $ref: '../schemas/vendor.yaml#/VendorSettings'
+            examples:
+              with_hours:
+                summary: Settings with hours configured
+                value:
+                  success: true
+                  data:
+                    restaurant_id: 1
+                    restaurant_name: "Pizza Palace"
+                    average_prep_time_minutes: 30
+                    hours_of_operation:
+                      monday:
+                        open: "09:00"
+                        close: "22:00"
+                        closed: false
+                      tuesday:
+                        open: "09:00"
+                        close: "22:00"
+                        closed: false
+                      wednesday:
+                        open: "09:00"
+                        close: "22:00"
+                        closed: false
+                      thursday:
+                        open: "09:00"
+                        close: "22:00"
+                        closed: false
+                      friday:
+                        open: "09:00"
+                        close: "23:00"
+                        closed: false
+                      saturday:
+                        open: "10:00"
+                        close: "23:00"
+                        closed: false
+                      sunday:
+                        open: "10:00"
+                        close: "22:00"
+                        closed: false
+              without_hours:
+                summary: Settings without hours configured
+                value:
+                  success: true
+                  data:
+                    restaurant_id: 1
+                    restaurant_name: "Pizza Palace"
+                    average_prep_time_minutes: 30
+      '400':
+        description: Invalid restaurant ID
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            example:
+              success: false
+              message: Invalid restaurant ID
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            example:
+              success: false
+              message: Authentication required
+      '403':
+        description: Not authorized (not a vendor/admin or vendor doesn't own this restaurant)
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            examples:
+              not_authorized_type:
+                summary: User is not a vendor or admin
+                value:
+                  success: false
+                  message: Only vendors and admins can access restaurant settings
+              not_vendor:
+                summary: Vendor profile not found
+                value:
+                  success: false
+                  message: Vendor profile not found
+              not_owner:
+                summary: Vendor does not own this restaurant
+                value:
+                  success: false
+                  message: You do not have permission to access this restaurant
+      '404':
+        description: Restaurant not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            example:
+              success: false
+              message: Restaurant not found
+      '500':
+        description: Internal server error
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  put:
+    summary: Update restaurant settings
+    description: |
+      Update hours of operation and/or average prep time for the restaurant.
+
+      **Authorization**:
+      - **Vendors**: Can only modify settings for restaurants they own
+      - **Admins**: Can modify settings for ANY restaurant
+
+      **Validation**:
+      - At least one field must be provided
+      - Average prep time must be between 1 and 300 minutes
+      - Hours must be in HH:MM format (24-hour)
+      - Open time must be before close time (unless closed)
+      - All days of the week must be provided if updating hours
+
+      **Partial updates**: You can update only prep time OR only hours OR both.
+    tags:
+      - Vendor
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: restaurantId
+        in: path
+        description: Restaurant ID
+        required: true
+        schema:
+          type: integer
+          example: 1
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/vendor.yaml#/UpdateVendorSettingsRequest'
+          examples:
+            update_both:
+              summary: Update both hours and prep time
+              value:
+                average_prep_time_minutes: 35
+                hours_of_operation:
+                  monday:
+                    open: "09:00"
+                    close: "22:00"
+                    closed: false
+                  tuesday:
+                    open: "09:00"
+                    close: "22:00"
+                    closed: false
+                  wednesday:
+                    open: "09:00"
+                    close: "22:00"
+                    closed: false
+                  thursday:
+                    open: "09:00"
+                    close: "22:00"
+                    closed: false
+                  friday:
+                    open: "09:00"
+                    close: "23:00"
+                    closed: false
+                  saturday:
+                    open: "10:00"
+                    close: "23:00"
+                    closed: false
+                  sunday:
+                    open: "10:00"
+                    close: "22:00"
+                    closed: false
+            update_hours_only:
+              summary: Update only hours of operation
+              value:
+                hours_of_operation:
+                  monday:
+                    open: "08:00"
+                    close: "21:00"
+                    closed: false
+                  tuesday:
+                    open: "08:00"
+                    close: "21:00"
+                    closed: false
+                  wednesday:
+                    open: "08:00"
+                    close: "21:00"
+                    closed: false
+                  thursday:
+                    open: "08:00"
+                    close: "21:00"
+                    closed: false
+                  friday:
+                    open: "08:00"
+                    close: "22:00"
+                    closed: false
+                  saturday:
+                    open: "09:00"
+                    close: "22:00"
+                    closed: false
+                  sunday:
+                    open: ""
+                    close: ""
+                    closed: true
+            update_prep_time_only:
+              summary: Update only prep time (use PATCH for quick updates)
+              value:
+                average_prep_time_minutes: 25
+    responses:
+      '200':
+        description: Settings updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Restaurant settings updated successfully
+                data:
+                  $ref: '../schemas/vendor.yaml#/VendorSettings'
+            example:
+              success: true
+              message: Restaurant settings updated successfully
+              data:
+                restaurant_id: 1
+                restaurant_name: "Pizza Palace"
+                average_prep_time_minutes: 35
+                hours_of_operation:
+                  monday:
+                    open: "09:00"
+                    close: "22:00"
+                    closed: false
+                  tuesday:
+                    open: "09:00"
+                    close: "22:00"
+                    closed: false
+                  wednesday:
+                    open: "09:00"
+                    close: "22:00"
+                    closed: false
+                  thursday:
+                    open: "09:00"
+                    close: "22:00"
+                    closed: false
+                  friday:
+                    open: "09:00"
+                    close: "23:00"
+                    closed: false
+                  saturday:
+                    open: "10:00"
+                    close: "23:00"
+                    closed: false
+                  sunday:
+                    open: "10:00"
+                    close: "22:00"
+                    closed: false
+      '400':
+        description: Invalid input
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            examples:
+              no_fields:
+                summary: No fields provided
+                value:
+                  success: false
+                  message: At least one field must be provided
+              invalid_prep_time:
+                summary: Prep time out of range
+                value:
+                  success: false
+                  message: Average prep time must be between 1 and 300 minutes
+              invalid_time_format:
+                summary: Invalid time format
+                value:
+                  success: false
+                  message: "Invalid hours of operation: Monday open time: invalid time format, must be HH:MM (24-hour)"
+              open_after_close:
+                summary: Open time after close time
+                value:
+                  success: false
+                  message: "Invalid hours of operation: Monday: open time must be before close time"
+              invalid_restaurant_id:
+                summary: Invalid restaurant ID in path
+                value:
+                  success: false
+                  message: Invalid restaurant ID
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            example:
+              success: false
+              message: Authentication required
+      '403':
+        description: Not authorized (not a vendor/admin or vendor doesn't own this restaurant)
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            examples:
+              not_authorized_type:
+                summary: User is not a vendor or admin
+                value:
+                  success: false
+                  message: Only vendors and admins can modify restaurant settings
+              not_vendor:
+                summary: Vendor profile not found
+                value:
+                  success: false
+                  message: Vendor profile not found
+              not_owner:
+                summary: Vendor does not own this restaurant
+                value:
+                  success: false
+                  message: You do not have permission to modify this restaurant
+      '404':
+        description: Restaurant not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            example:
+              success: false
+              message: Restaurant not found
+      '500':
+        description: Failed to update settings
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            examples:
+              update_failed:
+                summary: Database update failed
+                value:
+                  success: false
+                  message: Failed to update restaurant settings
+              parse_failed:
+                summary: Failed to process hours
+                value:
+                  success: false
+                  message: Failed to process hours of operation
+
+/api/vendor/restaurant/{restaurantId}/prep-time:
+  patch:
+    summary: Update average prep time
+    description: |
+      Quick update for just the average preparation time in minutes.
+
+      **Authorization**:
+      - **Vendors**: Can only modify settings for restaurants they own
+      - **Admins**: Can modify settings for ANY restaurant
+
+      **Use this endpoint** when you only need to update prep time and want a simpler API call.
+      For updating hours or both fields, use `PUT /api/vendor/restaurant/{restaurantId}/settings`.
+
+      **Validation**:
+      - Prep time is required
+      - Must be between 1 and 300 minutes
+    tags:
+      - Vendor
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: restaurantId
+        in: path
+        description: Restaurant ID
+        required: true
+        schema:
+          type: integer
+          example: 1
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/vendor.yaml#/UpdatePrepTimeRequest'
+          examples:
+            quick_update:
+              summary: Quick prep time update
+              value:
+                average_prep_time_minutes: 25
+            slow_kitchen:
+              summary: Increase prep time during busy hours
+              value:
+                average_prep_time_minutes: 45
+    responses:
+      '200':
+        description: Prep time updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Average prep time updated successfully
+                data:
+                  type: object
+                  properties:
+                    restaurant_id:
+                      type: integer
+                      example: 1
+                    average_prep_time_minutes:
+                      type: integer
+                      example: 25
+            example:
+              success: true
+              message: Average prep time updated successfully
+              data:
+                restaurant_id: 1
+                average_prep_time_minutes: 25
+      '400':
+        description: Invalid input
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            examples:
+              out_of_range:
+                summary: Prep time out of valid range
+                value:
+                  success: false
+                  message: Average prep time must be between 1 and 300 minutes
+              invalid_json:
+                summary: Invalid request body
+                value:
+                  success: false
+                  message: Invalid request body
+              invalid_restaurant_id:
+                summary: Invalid restaurant ID in path
+                value:
+                  success: false
+                  message: Invalid restaurant ID
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            example:
+              success: false
+              message: Authentication required
+      '403':
+        description: Not authorized (not a vendor/admin or vendor doesn't own this restaurant)
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            examples:
+              not_authorized_type:
+                summary: User is not a vendor or admin
+                value:
+                  success: false
+                  message: Only vendors and admins can modify restaurant settings
+              not_vendor:
+                summary: Vendor profile not found
+                value:
+                  success: false
+                  message: Vendor profile not found
+              not_owner:
+                summary: Vendor does not own this restaurant
+                value:
+                  success: false
+                  message: You do not have permission to modify this restaurant
+      '404':
+        description: Restaurant not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            example:
+              success: false
+              message: Restaurant not found
+      '500':
+        description: Failed to update prep time
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            example:
+              success: false
+              message: Failed to update prep time

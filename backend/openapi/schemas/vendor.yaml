@@ -1,0 +1,187 @@
+# Vendor-specific schemas
+
+DaySchedule:
+  type: object
+  required:
+    - open
+    - close
+    - closed
+  properties:
+    open:
+      type: string
+      pattern: '^([0-1][0-9]|2[0-3]):[0-5][0-9]$'
+      description: Opening time in HH:MM format (24-hour). Empty string if closed is true.
+      example: "09:00"
+    close:
+      type: string
+      pattern: '^([0-1][0-9]|2[0-3]):[0-5][0-9]$'
+      description: Closing time in HH:MM format (24-hour). Empty string if closed is true.
+      example: "22:00"
+    closed:
+      type: boolean
+      description: If true, the restaurant is closed on this day (open/close are ignored)
+      example: false
+  description: |
+    Operating hours for a single day.
+    - If `closed` is true, `open` and `close` can be empty strings
+    - If `closed` is false, `open` and `close` must be valid times in HH:MM format
+    - `open` time must be before `close` time
+
+HoursOfOperation:
+  type: object
+  required:
+    - monday
+    - tuesday
+    - wednesday
+    - thursday
+    - friday
+    - saturday
+    - sunday
+  properties:
+    monday:
+      $ref: '#/DaySchedule'
+    tuesday:
+      $ref: '#/DaySchedule'
+    wednesday:
+      $ref: '#/DaySchedule'
+    thursday:
+      $ref: '#/DaySchedule'
+    friday:
+      $ref: '#/DaySchedule'
+    saturday:
+      $ref: '#/DaySchedule'
+    sunday:
+      $ref: '#/DaySchedule'
+  description: |
+    Weekly operating hours for a restaurant.
+    All seven days must be specified.
+  example:
+    monday:
+      open: "09:00"
+      close: "22:00"
+      closed: false
+    tuesday:
+      open: "09:00"
+      close: "22:00"
+      closed: false
+    wednesday:
+      open: "09:00"
+      close: "22:00"
+      closed: false
+    thursday:
+      open: "09:00"
+      close: "22:00"
+      closed: false
+    friday:
+      open: "09:00"
+      close: "23:00"
+      closed: false
+    saturday:
+      open: "10:00"
+      close: "23:00"
+      closed: false
+    sunday:
+      open: "10:00"
+      close: "22:00"
+      closed: false
+
+VendorSettings:
+  type: object
+  required:
+    - restaurant_id
+    - restaurant_name
+    - average_prep_time_minutes
+  properties:
+    restaurant_id:
+      type: integer
+      description: The unique identifier of the restaurant
+      example: 1
+    restaurant_name:
+      type: string
+      description: The name of the restaurant
+      example: "Pizza Palace"
+    average_prep_time_minutes:
+      type: integer
+      minimum: 1
+      maximum: 300
+      description: Average time to prepare an order in minutes
+      example: 30
+    hours_of_operation:
+      allOf:
+        - $ref: '#/HoursOfOperation'
+      nullable: true
+      description: |
+        Weekly operating hours. Null if not configured.
+        When configured, includes all seven days of the week.
+  description: |
+    Restaurant settings for a vendor.
+    Includes prep time and optionally hours of operation.
+
+UpdateVendorSettingsRequest:
+  type: object
+  properties:
+    average_prep_time_minutes:
+      type: integer
+      minimum: 1
+      maximum: 300
+      description: Average preparation time in minutes (optional)
+      example: 30
+    hours_of_operation:
+      allOf:
+        - $ref: '#/HoursOfOperation'
+      nullable: true
+      description: |
+        Weekly operating hours (optional).
+        If provided, all seven days must be specified.
+  description: |
+    Request to update restaurant settings.
+    At least one field must be provided.
+    Both fields can be updated in a single request.
+  minProperties: 1
+  example:
+    average_prep_time_minutes: 35
+    hours_of_operation:
+      monday:
+        open: "09:00"
+        close: "22:00"
+        closed: false
+      tuesday:
+        open: "09:00"
+        close: "22:00"
+        closed: false
+      wednesday:
+        open: "09:00"
+        close: "22:00"
+        closed: false
+      thursday:
+        open: "09:00"
+        close: "22:00"
+        closed: false
+      friday:
+        open: "09:00"
+        close: "23:00"
+        closed: false
+      saturday:
+        open: "10:00"
+        close: "23:00"
+        closed: false
+      sunday:
+        open: "10:00"
+        close: "22:00"
+        closed: false
+
+UpdatePrepTimeRequest:
+  type: object
+  required:
+    - average_prep_time_minutes
+  properties:
+    average_prep_time_minutes:
+      type: integer
+      minimum: 1
+      maximum: 300
+      description: Average preparation time in minutes
+      example: 25
+  description: |
+    Quick update request for average prep time only.
+    Use this for simple prep time changes.
+    Use PUT /settings for updating hours or both fields.

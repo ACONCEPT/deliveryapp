@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import '../models/restaurant.dart';
 import '../models/restaurant_request.dart';
+import '../models/vendor_settings.dart';
 import 'base_service.dart';
 
 class RestaurantService extends BaseService {
@@ -169,5 +170,197 @@ class RestaurantService extends BaseService {
       ),
       'transfer restaurant ownership',
     );
+  }
+
+  // ============================================================================
+  // Restaurant Settings
+  // ============================================================================
+
+  /// Gets the average preparation time for a restaurant in minutes.
+  ///
+  /// Fetches restaurant settings from the backend API to get the configured
+  /// average prep time. This is used to pre-populate the prep time input when
+  /// vendors confirm orders.
+  ///
+  /// The vendor can override this value for specific orders based on complexity.
+  ///
+  /// Returns the average prep time in minutes, or 30 minutes as a default if
+  /// the API call fails or returns no data.
+  Future<int> getAveragePrepTime(String token, int restaurantId) async {
+    try {
+      developer.log(
+        '⏱️  Getting average prep time for restaurant $restaurantId',
+        name: serviceName,
+      );
+
+      final response = await httpClient.get(
+        '/api/vendor/restaurant/$restaurantId/settings',
+        headers: authHeaders(token),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        developer.log('✅ Received restaurant settings', name: serviceName);
+
+        if (json['success'] == true && json['data'] != null) {
+          final data = json['data'] as Map<String, dynamic>;
+          final prepTime = data['average_prep_time_minutes'] as int?;
+
+          if (prepTime != null) {
+            developer.log('📋 Average prep time: $prepTime minutes',
+                name: serviceName);
+            return prepTime;
+          }
+        }
+      }
+
+      // If API call fails or returns no data, use default
+      const defaultPrepTime = 30;
+      developer.log(
+        '⚠️  Using default prep time: $defaultPrepTime minutes (API returned no data)',
+        name: serviceName,
+      );
+      return defaultPrepTime;
+    } catch (e, stackTrace) {
+      developer.log(
+        '❌ Error getting prep time: $e',
+        name: serviceName,
+        error: e,
+        stackTrace: stackTrace,
+      );
+
+      // Return default on error
+      developer.log('📋 Falling back to default: 30 minutes',
+          name: serviceName);
+      return 30;
+    }
+  }
+
+  /// Get restaurant settings including hours of operation and prep time
+  /// GET /api/vendor/restaurant/{restaurantId}/settings
+  Future<VendorSettings> getRestaurantSettings(String token, int restaurantId) async {
+    try {
+      developer.log(
+        '🔧 Getting restaurant settings for restaurant $restaurantId',
+        name: serviceName,
+      );
+
+      final response = await httpClient.get(
+        '/api/vendor/restaurant/$restaurantId/settings',
+        headers: authHeaders(token),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        developer.log('✅ Received restaurant settings response', name: serviceName);
+
+        if (json['success'] == true && json['data'] != null) {
+          final data = json['data'] as Map<String, dynamic>;
+          final settings = VendorSettings.fromJson(data);
+          developer.log(
+            '📋 Loaded settings: prep time ${settings.averagePrepTimeMinutes} min, hours: ${settings.hoursOfOperation != null ? "configured" : "not set"}',
+            name: serviceName,
+          );
+          return settings;
+        }
+      }
+
+      throw Exception('Failed to load restaurant settings');
+    } catch (e, stackTrace) {
+      developer.log(
+        '❌ Error getting restaurant settings: $e',
+        name: serviceName,
+        error: e,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  /// Update restaurant settings (hours of operation and/or prep time)
+  /// PUT /api/vendor/restaurant/{restaurantId}/settings
+  Future<VendorSettings> updateRestaurantSettings(
+    String token,
+    int restaurantId,
+    UpdateVendorSettingsRequest request,
+  ) async {
+    try {
+      developer.log(
+        '🔧 Updating restaurant settings for restaurant $restaurantId',
+        name: serviceName,
+      );
+
+      if (!request.hasUpdates) {
+        throw Exception('At least one field must be updated');
+      }
+
+      final response = await httpClient.put(
+        '/api/vendor/restaurant/$restaurantId/settings',
+        headers: authHeaders(token),
+        body: request.toJson(),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        developer.log('✅ Successfully updated restaurant settings', name: serviceName);
+
+        if (json['success'] == true && json['data'] != null) {
+          final data = json['data'] as Map<String, dynamic>;
+          return VendorSettings.fromJson(data);
+        }
+      }
+
+      final errorData = jsonDecode(response.body);
+      throw Exception(errorData['message'] ?? 'Failed to update restaurant settings');
+    } catch (e, stackTrace) {
+      developer.log(
+        '❌ Error updating restaurant settings: $e',
+        name: serviceName,
+        error: e,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  /// Update only the average prep time (quick update)
+  /// PATCH /api/vendor/restaurant/{restaurantId}/prep-time
+  Future<void> updateRestaurantPrepTime(
+    String token,
+    int restaurantId,
+    int prepTimeMinutes,
+  ) async {
+    try {
+      developer.log(
+        '⏱️  Updating prep time to $prepTimeMinutes minutes for restaurant $restaurantId',
+        name: serviceName,
+      );
+
+      if (prepTimeMinutes < 1 || prepTimeMinutes > 300) {
+        throw Exception('Prep time must be between 1 and 300 minutes');
+      }
+
+      final response = await httpClient.patch(
+        '/api/vendor/restaurant/$restaurantId/prep-time',
+        headers: authHeaders(token),
+        body: {'average_prep_time_minutes': prepTimeMinutes},
+      );
+
+      if (response.statusCode == 200) {
+        developer.log('✅ Successfully updated prep time', name: serviceName);
+        return;
+      }
+
+      final errorData = jsonDecode(response.body);
+      throw Exception(errorData['message'] ?? 'Failed to update prep time');
+    } catch (e, stackTrace) {
+      developer.log(
+        '❌ Error updating prep time: $e',
+        name: serviceName,
+        error: e,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
   }
 }

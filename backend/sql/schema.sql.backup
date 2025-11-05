@@ -1,0 +1,1057 @@
+-- Delivery App Database Schema (CONSOLIDATED)
+-- PostgreSQL schema for delivery application with multi-user types
+-- Last Updated: 2025-10-27
+--
+-- This schema includes ALL incremental migrations consolidated into a single file:
+-- - 001_add_approval_system.sql: Vendor and restaurant approval workflow
+-- - 002_add_orders_system.sql: Orders, order items, and order status tracking
+-- - 003_add_driver_assignment_constraints.sql: Driver assignment safety constraints
+-- - 003_add_system_settings.sql: System-wide configuration settings
+-- - 004_add_hours_of_operation.sql: Restaurant hours of operation
+-- - add_vendor_to_menus.sql: Menu ownership by vendors
+
+-- ============================================================================
+-- EXTENSIONS
+-- ============================================================================
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- ============================================================================
+-- ENUMS
+-- ============================================================================
+
+-- User Types Enum
+DO $$ BEGIN
+    CREATE TYPE user_type AS ENUM ('customer', 'vendor', 'admin', 'driver');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- User Status Enum
+DO $$ BEGIN
+    CREATE TYPE user_status AS ENUM ('active', 'inactive', 'suspended');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- Order Status Enum (Updated with full order lifecycle from migration 002)
+DO $$ BEGIN
+    DROP TYPE IF EXISTS order_status CASCADE;
+    CREATE TYPE order_status AS ENUM (
+        'cart',              -- Customer building order
+        'pending',           -- Order placed, awaiting vendor confirmation
+        'confirmed',         -- Vendor confirmed
+        'preparing',         -- Vendor preparing food
+        'ready',             -- Ready for pickup
+        'driver_assigned',   -- Driver assigned
+        'picked_up',         -- Driver picked up order
+        'in_transit',        -- On the way to customer
+        'delivered',         -- Successfully delivered
+        'cancelled',         -- Cancelled by customer/vendor/system
+        'refunded'           -- Payment refunded
+    );
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- Approval Status Enum (From migration 001)
+DO $$ BEGIN
+    CREATE TYPE approval_status AS ENUM ('pending', 'approved', 'rejected');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- Setting Data Type Enum (From migration 003_system_settings)
+DO $$ BEGIN
+    CREATE TYPE setting_data_type AS ENUM ('string', 'number', 'boolean', 'json');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- ============================================================================
+-- USERS AND AUTHENTICATION
+-- ============================================================================
+
+-- Users Table (Main authentication table)
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(255) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    user_type user_type NOT NULL,
+    user_role VARCHAR(50),
+    status user_status DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Add default constraint for user_role to match user_type if not provided
+DO $$ BEGIN
+    ALTER TABLE users
+        ADD CONSTRAINT set_default_user_role
+        CHECK (user_role IS NOT NULL);
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- Function to set user_role to user_type if not provided
+CREATE OR REPLACE FUNCTION set_user_role()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.user_role IS NULL THEN
+        NEW.user_role := NEW.user_type::VARCHAR;
+    END IF;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Trigger to set user_role on insert/update
+DROP TRIGGER IF EXISTS trigger_set_user_role ON users;
+CREATE TRIGGER trigger_set_user_role
+    BEFORE INSERT OR UPDATE ON users
+    FOR EACH ROW
+    EXECUTE FUNCTION set_user_role();
+
+-- Insert test users (password for all is: password123)
+-- Note: These are bcrypt hashes of 'password123' with cost 12
+-- To regenerate: Run tools/scripts/generate_password_hashes.py
+INSERT INTO users (username, email, password_hash, user_type, status) VALUES
+    ('customer1', 'customer1@example.com', '$2b$12$zXLPmi/LbXSo873LI8Ze8ukBP1Ocf0qAJQLYCf.pd70FTQA0KeBJW', 'customer', 'active'),
+    ('vendor1', 'vendor1@example.com', '$2b$12$xF8sQXHqWYKxueKVSl8RYeEkPeFdnn4I.WGsU8LPbpC0Jl8rOMYjS', 'vendor', 'active'),
+    ('driver1', 'driver1@example.com', '$2b$12$26HV6GZDFCJ533M0XZPvDeIWb/9t5amzKhMKs1nuJ7A6JnMYpYZRa', 'driver', 'active'),
+    ('admin1', 'admin1@example.com', '$2b$12$iARvXZora7kAXkWGQUwzd.qP59W9CiBlsQzb7BwiN4ghLn5RJO6fO', 'admin', 'active')
+ON CONFLICT (username) DO NOTHING;
+
+-- ============================================================================
+-- CUSTOMER PROFILE AND ADDRESSES
+-- ============================================================================
+
+-- Customers Table
+CREATE TABLE IF NOT EXISTS customers (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    full_name VARCHAR(255) NOT NULL,
+    phone VARCHAR(20),
+    default_address_id INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Customer Addresses Table
+CREATE TABLE IF NOT EXISTS customer_addresses (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    address_line1 VARCHAR(255) NOT NULL,
+    address_line2 VARCHAR(255),
+    city VARCHAR(100) NOT NULL,
+    state VARCHAR(100),
+    postal_code VARCHAR(20),
+    country VARCHAR(100) DEFAULT 'USA',
+    latitude DECIMAL(10, 8),
+    longitude DECIMAL(11, 8),
+    is_default BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Add foreign key for default address
+DO $$ BEGIN
+    ALTER TABLE customers
+        ADD CONSTRAINT fk_default_address
+        FOREIGN KEY (default_address_id)
+        REFERENCES customer_addresses(id)
+        ON DELETE SET NULL;
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- Insert test customer profiles
+INSERT INTO customers (user_id, full_name, phone) VALUES
+    ((SELECT id FROM users WHERE username = 'customer1'), 'Customer customer1', '+1234567890')
+ON CONFLICT (user_id) DO NOTHING;
+
+-- ============================================================================
+-- VENDOR PROFILE AND MANAGEMENT
+-- ============================================================================
+
+-- Vendors Table (with approval system from migration 001)
+CREATE TABLE IF NOT EXISTS vendors (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    business_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    phone VARCHAR(20),
+    address_line1 VARCHAR(255),
+    address_line2 VARCHAR(255),
+    city VARCHAR(100),
+    state VARCHAR(100),
+    postal_code VARCHAR(20),
+    country VARCHAR(100) DEFAULT 'USA',
+    latitude DECIMAL(10, 8),
+    longitude DECIMAL(11, 8),
+    is_active BOOLEAN DEFAULT TRUE,
+    rating DECIMAL(3, 2) DEFAULT 0.00,
+    total_orders INTEGER DEFAULT 0,
+
+    -- Approval system columns (migration 001)
+    approval_status approval_status DEFAULT 'pending',
+    approved_by_admin_id INTEGER,
+    approved_at TIMESTAMP,
+    rejection_reason TEXT,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Add foreign key for approved_by_admin_id after admins table is created
+-- This will be added later in the schema
+
+-- Insert test vendor profiles
+INSERT INTO vendors (user_id, business_name, phone, city, approval_status, approved_at) VALUES
+    ((SELECT id FROM users WHERE username = 'vendor1'), 'Business vendor1', '+1234567890', 'New York', 'approved', CURRENT_TIMESTAMP)
+ON CONFLICT (user_id) DO NOTHING;
+
+-- Vendor Users Table (Many users can be associated with one vendor)
+CREATE TABLE IF NOT EXISTS vendor_users (
+    id SERIAL PRIMARY KEY,
+    vendor_id INTEGER NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(50) DEFAULT 'staff',
+    permissions JSONB,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(vendor_id, user_id)
+);
+
+-- ============================================================================
+-- RESTAURANTS AND MENUS
+-- ============================================================================
+
+-- Restaurants Table (with approval system from migration 001 and hours from migration 004)
+CREATE TABLE IF NOT EXISTS restaurants (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    phone VARCHAR(20),
+    address_line1 VARCHAR(255),
+    address_line2 VARCHAR(255),
+    city VARCHAR(100),
+    state VARCHAR(100),
+    postal_code VARCHAR(20),
+    country VARCHAR(100) DEFAULT 'USA',
+    latitude DECIMAL(10, 8),
+    longitude DECIMAL(11, 8),
+    is_active BOOLEAN DEFAULT TRUE,
+    rating DECIMAL(3, 2) DEFAULT 0.00,
+    total_orders INTEGER DEFAULT 0,
+
+    -- Approval system columns (migration 001)
+    approval_status approval_status DEFAULT 'pending',
+    approved_by_admin_id INTEGER,
+    approved_at TIMESTAMP,
+    rejection_reason TEXT,
+
+    -- Hours of operation (migration 004)
+    hours_of_operation JSONB,
+
+    -- Average preparation time in minutes
+    average_prep_time_minutes INTEGER DEFAULT 30,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE restaurants IS 'Stores restaurant information. Each restaurant is owned by one vendor via vendor_restaurants table.';
+COMMENT ON COLUMN restaurants.rating IS 'Average rating from customer reviews (0.00 to 5.00)';
+COMMENT ON COLUMN restaurants.total_orders IS 'Total number of orders placed for this restaurant';
+COMMENT ON COLUMN restaurants.approval_status IS 'Approval status: pending, approved, or rejected';
+COMMENT ON COLUMN restaurants.approved_by_admin_id IS 'Admin who approved/rejected the restaurant';
+COMMENT ON COLUMN restaurants.approved_at IS 'Timestamp when restaurant was approved';
+COMMENT ON COLUMN restaurants.rejection_reason IS 'Reason why restaurant was rejected (NULL if not rejected)';
+COMMENT ON COLUMN restaurants.hours_of_operation IS 'Weekly operating hours in JSONB format. Structure: {"monday": {"open": "09:00", "close": "22:00", "closed": false}, ...}';
+COMMENT ON COLUMN restaurants.average_prep_time_minutes IS 'Average preparation time in minutes for orders from this restaurant';
+
+-- Menus Table (with vendor_id from add_vendor_to_menus migration)
+CREATE TABLE IF NOT EXISTS menus (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    menu_config JSONB NOT NULL,
+    vendor_id INTEGER REFERENCES vendors(id) ON DELETE CASCADE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE menus IS 'Stores menu templates that can be assigned to restaurants. Menu configuration stored as JSON. Each menu is owned by a vendor.';
+COMMENT ON COLUMN menus.menu_config IS 'JSON configuration containing menu items, categories, prices, and other menu data';
+COMMENT ON COLUMN menus.vendor_id IS 'The vendor who owns this menu template. Can be NULL for system-wide menus (admin-created).';
+
+-- Restaurant Menus Table (Junction table for restaurant-menu relationship)
+CREATE TABLE IF NOT EXISTS restaurant_menus (
+    id SERIAL PRIMARY KEY,
+    restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+    menu_id INTEGER NOT NULL REFERENCES menus(id) ON DELETE CASCADE,
+    is_active BOOLEAN DEFAULT FALSE,
+    display_order INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(restaurant_id, menu_id)
+);
+
+COMMENT ON TABLE restaurant_menus IS 'Junction table linking restaurants to their menus. One restaurant can have multiple menus, but only one should be active at a time.';
+COMMENT ON COLUMN restaurant_menus.is_active IS 'Indicates which menu the frontend should currently display for this restaurant. Only one menu per restaurant should be active.';
+COMMENT ON COLUMN restaurant_menus.display_order IS 'Order in which to display menus if multiple are available';
+
+-- Vendor Restaurants Table (Links vendors to restaurants they own)
+CREATE TABLE IF NOT EXISTS vendor_restaurants (
+    id SERIAL PRIMARY KEY,
+    vendor_id INTEGER NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,
+    restaurant_id INTEGER UNIQUE NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE vendor_restaurants IS 'Links vendors to restaurants they own. One vendor can own many restaurants, but each restaurant can only be owned by one vendor (enforced by UNIQUE constraint on restaurant_id).';
+
+-- Insert test restaurant data with default hours
+INSERT INTO restaurants (name, description, phone, address_line1, city, state, postal_code, country, is_active, approval_status, approved_at, hours_of_operation) VALUES
+    ('Pizza Palace', 'Authentic Italian pizza and pasta', '+1234567891', '123 Main St', 'New York', 'NY', '10001', 'USA', TRUE, 'approved', CURRENT_TIMESTAMP,
+     jsonb_build_object(
+        'monday', jsonb_build_object('open', '09:00', 'close', '22:00', 'closed', false),
+        'tuesday', jsonb_build_object('open', '09:00', 'close', '22:00', 'closed', false),
+        'wednesday', jsonb_build_object('open', '09:00', 'close', '22:00', 'closed', false),
+        'thursday', jsonb_build_object('open', '09:00', 'close', '22:00', 'closed', false),
+        'friday', jsonb_build_object('open', '09:00', 'close', '23:00', 'closed', false),
+        'saturday', jsonb_build_object('open', '10:00', 'close', '23:00', 'closed', false),
+        'sunday', jsonb_build_object('open', '10:00', 'close', '22:00', 'closed', false)
+     )),
+    ('Burger Haven', 'Gourmet burgers and fries', '+1234567892', '456 Oak Ave', 'New York', 'NY', '10002', 'USA', TRUE, 'approved', CURRENT_TIMESTAMP,
+     jsonb_build_object(
+        'monday', jsonb_build_object('open', '09:00', 'close', '22:00', 'closed', false),
+        'tuesday', jsonb_build_object('open', '09:00', 'close', '22:00', 'closed', false),
+        'wednesday', jsonb_build_object('open', '09:00', 'close', '22:00', 'closed', false),
+        'thursday', jsonb_build_object('open', '09:00', 'close', '22:00', 'closed', false),
+        'friday', jsonb_build_object('open', '09:00', 'close', '23:00', 'closed', false),
+        'saturday', jsonb_build_object('open', '10:00', 'close', '23:00', 'closed', false),
+        'sunday', jsonb_build_object('open', '10:00', 'close', '22:00', 'closed', false)
+     ))
+ON CONFLICT DO NOTHING;
+
+-- Insert test menu data (owned by vendor1)
+INSERT INTO menus (name, description, menu_config, vendor_id, is_active) VALUES
+    ('Pizza Palace Main Menu', 'Main menu for Pizza Palace',
+    '{"categories": [{"id": 1, "name": "Pizzas", "items": [{"id": 1, "name": "Margherita", "price": 12.99, "description": "Classic tomato and mozzarella"}, {"id": 2, "name": "Pepperoni", "price": 14.99, "description": "Pepperoni and cheese"}]}, {"id": 2, "name": "Pasta", "items": [{"id": 3, "name": "Spaghetti Carbonara", "price": 13.99, "description": "Creamy pasta with bacon"}]}]}'::jsonb,
+    (SELECT id FROM vendors WHERE business_name = 'Business vendor1' LIMIT 1),
+    TRUE),
+    ('Burger Haven Main Menu', 'Main menu for Burger Haven',
+    '{"categories": [{"id": 1, "name": "Burgers", "items": [{"id": 1, "name": "Classic Burger", "price": 9.99, "description": "Beef patty with lettuce and tomato"}, {"id": 2, "name": "Cheese Burger", "price": 10.99, "description": "Beef patty with cheddar cheese"}]}, {"id": 2, "name": "Sides", "items": [{"id": 3, "name": "French Fries", "price": 3.99, "description": "Crispy golden fries"}]}]}'::jsonb,
+    (SELECT id FROM vendors WHERE business_name = 'Business vendor1' LIMIT 1),
+    TRUE)
+ON CONFLICT DO NOTHING;
+
+-- Link restaurants to menus
+INSERT INTO restaurant_menus (restaurant_id, menu_id, is_active, display_order) VALUES
+    ((SELECT id FROM restaurants WHERE name = 'Pizza Palace' LIMIT 1),
+     (SELECT id FROM menus WHERE name = 'Pizza Palace Main Menu' LIMIT 1),
+     TRUE, 1),
+    ((SELECT id FROM restaurants WHERE name = 'Burger Haven' LIMIT 1),
+     (SELECT id FROM menus WHERE name = 'Burger Haven Main Menu' LIMIT 1),
+     TRUE, 1)
+ON CONFLICT (restaurant_id, menu_id) DO NOTHING;
+
+-- Link vendor to restaurants
+INSERT INTO vendor_restaurants (vendor_id, restaurant_id) VALUES
+    ((SELECT id FROM vendors WHERE business_name = 'Business vendor1' LIMIT 1),
+     (SELECT id FROM restaurants WHERE name = 'Pizza Palace' LIMIT 1)),
+    ((SELECT id FROM vendors WHERE business_name = 'Business vendor1' LIMIT 1),
+     (SELECT id FROM restaurants WHERE name = 'Burger Haven' LIMIT 1))
+ON CONFLICT (restaurant_id) DO NOTHING;
+
+-- ============================================================================
+-- DRIVER PROFILE
+-- ============================================================================
+
+-- Drivers Table
+CREATE TABLE IF NOT EXISTS drivers (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    full_name VARCHAR(255) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    vehicle_type VARCHAR(50),
+    vehicle_plate VARCHAR(20),
+    license_number VARCHAR(50),
+    is_available BOOLEAN DEFAULT FALSE,
+    current_latitude DECIMAL(10, 8),
+    current_longitude DECIMAL(11, 8),
+    rating DECIMAL(3, 2) DEFAULT 0.00,
+    total_deliveries INTEGER DEFAULT 0,
+
+    -- Approval system columns
+    approval_status approval_status DEFAULT 'pending',
+    approved_by_admin_id INTEGER,
+    approved_at TIMESTAMP,
+    rejection_reason TEXT,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Insert test driver profiles
+INSERT INTO drivers (user_id, full_name, phone, vehicle_type, approval_status, approved_at) VALUES
+    ((SELECT id FROM users WHERE username = 'driver1'), 'Driver driver1', '+1234567890', 'Car', 'approved', CURRENT_TIMESTAMP)
+ON CONFLICT (user_id) DO NOTHING;
+
+-- ============================================================================
+-- ADMIN PROFILE
+-- ============================================================================
+
+-- Admins Table
+CREATE TABLE IF NOT EXISTS admins (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    full_name VARCHAR(255) NOT NULL,
+    phone VARCHAR(20),
+    role VARCHAR(100),
+    permissions JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Insert test admin profiles
+INSERT INTO admins (user_id, full_name, role) VALUES
+    ((SELECT id FROM users WHERE username = 'admin1'), 'Admin admin1', 'System Administrator')
+ON CONFLICT (user_id) DO NOTHING;
+
+-- Now add the foreign key constraints for approval system that reference admins
+DO $$ BEGIN
+    ALTER TABLE vendors
+        ADD CONSTRAINT fk_vendors_approved_by_admin
+        FOREIGN KEY (approved_by_admin_id)
+        REFERENCES admins(id)
+        ON DELETE SET NULL;
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE restaurants
+        ADD CONSTRAINT fk_restaurants_approved_by_admin
+        FOREIGN KEY (approved_by_admin_id)
+        REFERENCES admins(id)
+        ON DELETE SET NULL;
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE drivers
+        ADD CONSTRAINT fk_drivers_approved_by_admin
+        FOREIGN KEY (approved_by_admin_id)
+        REFERENCES admins(id)
+        ON DELETE SET NULL;
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- ============================================================================
+-- APPROVAL HISTORY (Migration 001)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS approval_history (
+    id SERIAL PRIMARY KEY,
+    entity_type VARCHAR(50) NOT NULL, -- 'vendor', 'restaurant', or 'driver'
+    entity_id INTEGER NOT NULL,       -- ID of the vendor, restaurant, or driver
+    admin_id INTEGER NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
+    action approval_status NOT NULL,   -- 'approved' or 'rejected' (not 'pending')
+    reason TEXT,                       -- Reason for rejection (NULL for approvals)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE approval_history IS 'Audit trail for vendor, restaurant, and driver approval/rejection events';
+COMMENT ON COLUMN approval_history.entity_type IS 'Type of entity being approved: vendor, restaurant, or driver';
+COMMENT ON COLUMN approval_history.entity_id IS 'ID of the vendor, restaurant, or driver being approved/rejected';
+COMMENT ON COLUMN approval_history.action IS 'Approval action taken: approved or rejected';
+COMMENT ON COLUMN approval_history.reason IS 'Reason for rejection (NULL for approvals)';
+
+-- ============================================================================
+-- ORDERS SYSTEM (Migration 002)
+-- ============================================================================
+
+-- Orders Table
+CREATE TABLE IF NOT EXISTS orders (
+    id SERIAL PRIMARY KEY,
+
+    -- Foreign Keys
+    customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+    delivery_address_id INTEGER REFERENCES customer_addresses(id) ON DELETE SET NULL,
+    driver_id INTEGER REFERENCES drivers(id) ON DELETE SET NULL,
+
+    -- Status
+    status order_status NOT NULL DEFAULT 'pending',
+
+    -- Amounts (in cents to avoid floating point issues, or use DECIMAL)
+    subtotal_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    tax_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    delivery_fee DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    discount_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    total_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+
+    -- Timestamps
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    placed_at TIMESTAMP,  -- When customer placed order
+    confirmed_at TIMESTAMP,  -- When vendor confirmed
+    ready_at TIMESTAMP,  -- When order ready for pickup
+    delivered_at TIMESTAMP,  -- When delivered
+    cancelled_at TIMESTAMP,  -- When cancelled
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- Additional Info
+    special_instructions TEXT,
+    cancellation_reason TEXT,
+    estimated_preparation_time INTEGER,  -- in minutes
+    estimated_delivery_time TIMESTAMP,
+
+    -- Metadata
+    is_active BOOLEAN DEFAULT true,
+
+    CONSTRAINT orders_positive_amounts CHECK (
+        subtotal_amount >= 0 AND
+        tax_amount >= 0 AND
+        delivery_fee >= 0 AND
+        discount_amount >= 0 AND
+        total_amount >= 0
+    )
+);
+
+COMMENT ON TABLE orders IS 'Main orders table tracking customer orders from creation to delivery';
+COMMENT ON COLUMN orders.subtotal_amount IS 'Sum of all order items before tax and fees';
+COMMENT ON COLUMN orders.tax_amount IS 'Calculated tax amount based on location';
+COMMENT ON COLUMN orders.delivery_fee IS 'Delivery fee charged to customer';
+COMMENT ON COLUMN orders.discount_amount IS 'Total discounts applied (promos, coupons)';
+COMMENT ON COLUMN orders.total_amount IS 'Final amount: subtotal + tax + delivery_fee - discount_amount';
+COMMENT ON COLUMN orders.estimated_preparation_time IS 'Vendor estimated prep time in minutes';
+
+-- Driver-Status Consistency Check (Migration 003_driver_assignment_constraints)
+DO $$ BEGIN
+    ALTER TABLE orders
+    ADD CONSTRAINT check_driver_status_consistency
+    CHECK (
+        -- Orders without drivers must be in pre-assignment states
+        (driver_id IS NULL AND status IN ('cart', 'pending', 'confirmed', 'preparing', 'ready', 'cancelled', 'refunded'))
+        OR
+        -- Orders with drivers must be in post-assignment states
+        (driver_id IS NOT NULL AND status IN ('driver_assigned', 'picked_up', 'in_transit', 'delivered', 'cancelled', 'refunded'))
+    );
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+COMMENT ON CONSTRAINT check_driver_status_consistency ON orders IS
+'Enforces valid driver-status combinations: orders without drivers must be pre-assignment, orders with drivers must be post-assignment';
+
+-- Order Items Table
+CREATE TABLE IF NOT EXISTS order_items (
+    id SERIAL PRIMARY KEY,
+
+    -- Foreign Key
+    order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+
+    -- Item Details (stored at time of order to preserve historical pricing)
+    menu_item_name VARCHAR(255) NOT NULL,
+    menu_item_description TEXT,
+    price_at_time DECIMAL(10, 2) NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 1,
+
+    -- Customizations (JSONB for flexibility)
+    customizations JSONB,
+
+    -- Calculated
+    line_total DECIMAL(10, 2) NOT NULL,
+
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT order_items_positive_quantity CHECK (quantity > 0),
+    CONSTRAINT order_items_positive_price CHECK (price_at_time >= 0),
+    CONSTRAINT order_items_positive_total CHECK (line_total >= 0)
+);
+
+COMMENT ON TABLE order_items IS 'Line items for each order, preserving historical pricing and customizations';
+COMMENT ON COLUMN order_items.customizations IS 'JSONB field for item customizations (e.g., {"size": "large", "toppings": ["cheese", "olives"]})';
+COMMENT ON COLUMN order_items.line_total IS 'Calculated as price_at_time * quantity';
+
+-- Order Status History Table (audit trail)
+CREATE TABLE IF NOT EXISTS order_status_history (
+    id SERIAL PRIMARY KEY,
+
+    -- Foreign Keys
+    order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,  -- Who made the change
+
+    -- Status Change
+    from_status order_status,
+    to_status order_status NOT NULL,
+
+    -- Additional Info
+    notes TEXT,
+    metadata JSONB,  -- Additional context (e.g., reason codes, system info)
+
+    -- Timestamp
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE order_status_history IS 'Audit trail for order status changes';
+COMMENT ON COLUMN order_status_history.metadata IS 'Additional context in JSONB format (e.g., {"ip": "...", "user_agent": "..."})';
+
+-- ============================================================================
+-- SYSTEM SETTINGS (Migration 003_system_settings)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS system_settings (
+    id SERIAL PRIMARY KEY,
+
+    -- Setting Key (unique identifier)
+    setting_key VARCHAR(255) NOT NULL UNIQUE,
+
+    -- Setting Value (stored as text, parsed based on data_type)
+    setting_value TEXT NOT NULL,
+
+    -- Data Type (for validation and parsing)
+    data_type setting_data_type NOT NULL DEFAULT 'string',
+
+    -- Metadata
+    description TEXT,
+    category VARCHAR(100),
+    is_editable BOOLEAN DEFAULT true,
+
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE system_settings IS 'System-wide configuration settings managed by admins';
+COMMENT ON COLUMN system_settings.setting_key IS 'Unique key identifier for the setting';
+COMMENT ON COLUMN system_settings.setting_value IS 'Setting value stored as text, parsed based on data_type';
+COMMENT ON COLUMN system_settings.data_type IS 'Data type for validation: string, number, boolean, or json';
+COMMENT ON COLUMN system_settings.description IS 'Human-readable description of what the setting controls';
+COMMENT ON COLUMN system_settings.category IS 'Category grouping (e.g., orders, payments, delivery, system)';
+COMMENT ON COLUMN system_settings.is_editable IS 'Whether the setting can be modified via API (false = read-only)';
+
+-- Insert comprehensive system settings
+INSERT INTO system_settings (setting_key, setting_value, data_type, description, category, is_editable) VALUES
+    -- Order Settings
+    ('minimum_order_amount', '10.00', 'number', 'Minimum order subtotal required in dollars', 'orders', true),
+    ('tax_rate', '0.085', 'number', 'Sales tax rate (0.085 = 8.5%)', 'orders', true),
+    ('default_delivery_fee', '5.00', 'number', 'Default delivery fee amount in dollars', 'orders', true),
+    ('order_auto_cancel_minutes', '30', 'number', 'Minutes before unconfirmed orders auto-cancel', 'orders', true),
+    ('max_order_amount', '500.00', 'number', 'Maximum order subtotal allowed in dollars', 'orders', true),
+    ('allow_scheduled_orders', 'true', 'boolean', 'Enable customers to schedule orders for later', 'orders', true),
+    ('order_preparation_time', '30', 'number', 'Average order preparation time in minutes', 'orders', true),
+
+    -- Payment Settings
+    ('platform_commission_rate', '0.15', 'number', 'Platform commission rate (0.15 = 15%)', 'payments', true),
+    ('driver_commission_rate', '0.10', 'number', 'Driver commission rate (0.10 = 10%)', 'payments', true),
+    ('stripe_enabled', 'false', 'boolean', 'Enable Stripe payment processing', 'payments', true),
+    ('payment_methods', '["cash", "card"]', 'json', 'Enabled payment methods', 'payments', true),
+    ('refund_window_hours', '24', 'number', 'Hours within which refunds can be requested', 'payments', true),
+
+    -- Delivery Settings
+    ('max_delivery_radius_km', '20.0', 'number', 'Maximum delivery radius in kilometers', 'delivery', true),
+    ('estimated_prep_time_default', '30', 'number', 'Default preparation time in minutes if not specified', 'delivery', true),
+    ('estimated_delivery_time_per_km', '2', 'number', 'Estimated delivery time per kilometer in minutes', 'delivery', true),
+    ('delivery_radius_km', '20', 'number', 'Maximum delivery radius in kilometers', 'delivery', true),
+    ('estimated_delivery_time', '45', 'number', 'Estimated delivery time in minutes', 'delivery', true),
+    ('enable_contactless_delivery', 'true', 'boolean', 'Allow contactless delivery option', 'delivery', true),
+
+    -- System Settings
+    ('maintenance_mode', 'false', 'boolean', 'Enable maintenance mode (disables new orders)', 'system', true),
+    ('allow_new_registrations', 'true', 'boolean', 'Allow new user registrations', 'system', true),
+    ('require_vendor_approval', 'true', 'boolean', 'Require admin approval for new vendors', 'system', true),
+    ('require_restaurant_approval', 'true', 'boolean', 'Require admin approval for new restaurants', 'system', true),
+    ('app_name', 'Delivery App', 'string', 'Application name displayed to users', 'system', true),
+    ('api_version', '1.0.0', 'string', 'Current API version', 'system', false),
+    ('max_concurrent_orders', '100', 'number', 'Maximum concurrent active orders', 'system', true),
+    ('session_timeout_minutes', '60', 'number', 'User session timeout in minutes', 'system', true),
+
+    -- Business Settings
+    ('support_email', 'support@deliveryapp.com', 'string', 'Customer support email address', 'business', true),
+    ('support_phone', '1-800-DELIVERY', 'string', 'Customer support phone number', 'business', true),
+    ('business_name', 'DeliveryApp', 'string', 'Business name for branding', 'business', false),
+    ('terms_url', 'https://deliveryapp.com/terms', 'string', 'Terms of service URL', 'business', true),
+    ('privacy_url', 'https://deliveryapp.com/privacy', 'string', 'Privacy policy URL', 'business', true),
+    ('business_hours', '{"mon-fri": "9:00-22:00", "sat-sun": "10:00-23:00"}', 'json', 'Operating hours by day', 'business', true)
+ON CONFLICT (setting_key) DO NOTHING;
+
+-- ============================================================================
+-- MESSAGING SYSTEM
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS messages (
+    id SERIAL PRIMARY KEY,
+
+    -- Foreign Keys
+    sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+
+    -- Message Content
+    content TEXT NOT NULL CHECK (LENGTH(content) > 0 AND LENGTH(content) <= 5000),
+
+    -- Read Status
+    read_at TIMESTAMP,
+
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- Constraints
+    CONSTRAINT messages_no_self_messaging CHECK (sender_id != recipient_id)
+);
+
+COMMENT ON TABLE messages IS 'Messages between users (customers, vendors, admins). Drivers cannot send or receive messages.';
+COMMENT ON COLUMN messages.content IS 'Message content, limited to 5000 characters';
+COMMENT ON COLUMN messages.read_at IS 'Timestamp when recipient read the message';
+COMMENT ON CONSTRAINT messages_no_self_messaging ON messages IS 'Users cannot send messages to themselves';
+
+-- ============================================================================
+-- DASHBOARD WIDGETS
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS dashboard_widgets (
+    id SERIAL PRIMARY KEY,
+    widget_key VARCHAR(100) UNIQUE NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    icon VARCHAR(100),
+    color VARCHAR(50),
+    route VARCHAR(255),
+    description TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- User Role Widgets Table (Maps widgets to user roles)
+CREATE TABLE IF NOT EXISTS user_role_widgets (
+    id SERIAL PRIMARY KEY,
+    user_role VARCHAR(50) NOT NULL,
+    widget_id INTEGER NOT NULL REFERENCES dashboard_widgets(id) ON DELETE CASCADE,
+    display_order INTEGER DEFAULT 0,
+    is_enabled BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_role, widget_id)
+);
+
+-- Seed default dashboard widgets
+INSERT INTO dashboard_widgets (widget_key, title, icon, color, route, description) VALUES
+    ('restaurant_admin', 'Restaurant Admin', 'restaurant_menu', 'red', '/admin/restaurants', 'Manage all restaurants'),
+    ('vendor_admin', 'Vendor Admin', 'store', 'orange', '/admin/vendors', 'Manage all vendors'),
+    ('order_dashboard', 'Order Dashboard', 'dashboard', 'blue', '/orders', 'View and manage orders'),
+    ('approvals', 'Approvals', 'approval', 'green', '/admin/approvals', 'Approve pending items'),
+    ('create_restaurant', 'Create Restaurant', 'add_business', 'orange', '/vendor/create-restaurant', 'Add a new restaurant'),
+    ('order_now', 'Order Now', 'shopping_cart', 'green', '/customer/order', 'Place a new order'),
+    ('recent_orders', 'Recent Orders', 'history', 'blue', '/customer/orders', 'View your order history'),
+    ('delivery', 'Delivery', 'local_shipping', 'purple', '/driver/delivery', 'Current delivery'),
+    ('open_orders', 'Open Orders', 'list_alt', 'blue', '/driver/orders', 'Available deliveries')
+ON CONFLICT (widget_key) DO NOTHING;
+
+-- Seed default widget permissions for each user role
+-- Admin widgets
+INSERT INTO user_role_widgets (user_role, widget_id, display_order) VALUES
+    ('admin', (SELECT id FROM dashboard_widgets WHERE widget_key = 'restaurant_admin'), 1),
+    ('admin', (SELECT id FROM dashboard_widgets WHERE widget_key = 'vendor_admin'), 2),
+    ('admin', (SELECT id FROM dashboard_widgets WHERE widget_key = 'order_dashboard'), 3),
+    ('admin', (SELECT id FROM dashboard_widgets WHERE widget_key = 'approvals'), 4)
+ON CONFLICT (user_role, widget_id) DO NOTHING;
+
+-- Vendor widgets
+INSERT INTO user_role_widgets (user_role, widget_id, display_order) VALUES
+    ('vendor', (SELECT id FROM dashboard_widgets WHERE widget_key = 'create_restaurant'), 1),
+    ('vendor', (SELECT id FROM dashboard_widgets WHERE widget_key = 'order_dashboard'), 2)
+ON CONFLICT (user_role, widget_id) DO NOTHING;
+
+-- Customer widgets
+INSERT INTO user_role_widgets (user_role, widget_id, display_order) VALUES
+    ('customer', (SELECT id FROM dashboard_widgets WHERE widget_key = 'order_now'), 1),
+    ('customer', (SELECT id FROM dashboard_widgets WHERE widget_key = 'recent_orders'), 2)
+ON CONFLICT (user_role, widget_id) DO NOTHING;
+
+-- Driver widgets
+INSERT INTO user_role_widgets (user_role, widget_id, display_order) VALUES
+    ('driver', (SELECT id FROM dashboard_widgets WHERE widget_key = 'delivery'), 1),
+    ('driver', (SELECT id FROM dashboard_widgets WHERE widget_key = 'open_orders'), 2)
+ON CONFLICT (user_role, widget_id) DO NOTHING;
+
+-- ============================================================================
+-- INDEXES FOR PERFORMANCE
+-- ============================================================================
+
+-- User indexes
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_type ON users(user_type);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(user_role);
+
+-- Profile indexes
+CREATE INDEX IF NOT EXISTS idx_customers_user_id ON customers(user_id);
+CREATE INDEX IF NOT EXISTS idx_vendors_user_id ON vendors(user_id);
+CREATE INDEX IF NOT EXISTS idx_vendor_users_vendor_id ON vendor_users(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_vendor_users_user_id ON vendor_users(user_id);
+CREATE INDEX IF NOT EXISTS idx_drivers_user_id ON drivers(user_id);
+CREATE INDEX IF NOT EXISTS idx_admins_user_id ON admins(user_id);
+
+-- Address indexes
+CREATE INDEX IF NOT EXISTS idx_customer_addresses_customer_id ON customer_addresses(customer_id);
+
+-- Dashboard indexes
+CREATE INDEX IF NOT EXISTS idx_dashboard_widgets_key ON dashboard_widgets(widget_key);
+CREATE INDEX IF NOT EXISTS idx_user_role_widgets_role ON user_role_widgets(user_role);
+CREATE INDEX IF NOT EXISTS idx_user_role_widgets_widget ON user_role_widgets(widget_id);
+
+-- Restaurant and menu indexes
+CREATE INDEX IF NOT EXISTS idx_restaurants_name ON restaurants(name);
+CREATE INDEX IF NOT EXISTS idx_restaurants_city ON restaurants(city);
+CREATE INDEX IF NOT EXISTS idx_restaurants_is_active ON restaurants(is_active);
+CREATE INDEX IF NOT EXISTS idx_restaurants_hours_of_operation ON restaurants USING GIN (hours_of_operation);
+CREATE INDEX IF NOT EXISTS idx_menus_name ON menus(name);
+CREATE INDEX IF NOT EXISTS idx_menus_vendor_id ON menus(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_menus_is_active ON menus(is_active);
+CREATE INDEX IF NOT EXISTS idx_restaurant_menus_restaurant_id ON restaurant_menus(restaurant_id);
+CREATE INDEX IF NOT EXISTS idx_restaurant_menus_menu_id ON restaurant_menus(menu_id);
+CREATE INDEX IF NOT EXISTS idx_restaurant_menus_is_active ON restaurant_menus(is_active);
+CREATE INDEX IF NOT EXISTS idx_vendor_restaurants_vendor_id ON vendor_restaurants(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_vendor_restaurants_restaurant_id ON vendor_restaurants(restaurant_id);
+
+-- Approval system indexes (Migration 001)
+CREATE INDEX IF NOT EXISTS idx_vendors_approval_status ON vendors(approval_status);
+CREATE INDEX IF NOT EXISTS idx_vendors_approved_by ON vendors(approved_by_admin_id) WHERE approved_by_admin_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_restaurants_approval_status ON restaurants(approval_status);
+CREATE INDEX IF NOT EXISTS idx_restaurants_approved_by ON restaurants(approved_by_admin_id) WHERE approved_by_admin_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_drivers_approval_status ON drivers(approval_status);
+CREATE INDEX IF NOT EXISTS idx_drivers_approved_by ON drivers(approved_by_admin_id) WHERE approved_by_admin_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_approval_history_entity ON approval_history(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_approval_history_admin ON approval_history(admin_id);
+CREATE INDEX IF NOT EXISTS idx_approval_history_action ON approval_history(action);
+CREATE INDEX IF NOT EXISTS idx_approval_history_created_at ON approval_history(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_approval_history_entity_admin ON approval_history(entity_type, entity_id, admin_id, created_at DESC);
+
+-- Orders indexes (Migration 002)
+CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id);
+CREATE INDEX IF NOT EXISTS idx_orders_restaurant_id ON orders(restaurant_id);
+CREATE INDEX IF NOT EXISTS idx_orders_driver_id ON orders(driver_id);
+CREATE INDEX IF NOT EXISTS idx_orders_delivery_address_id ON orders(delivery_address_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_placed_at ON orders(placed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_is_active ON orders(is_active);
+CREATE INDEX IF NOT EXISTS idx_orders_restaurant_status ON orders(restaurant_id, status);
+CREATE INDEX IF NOT EXISTS idx_orders_customer_status ON orders(customer_id, status);
+
+-- Driver assignment performance index (Migration 003_driver_assignment_constraints)
+CREATE INDEX IF NOT EXISTS idx_orders_available_for_driver ON orders(status, driver_id) WHERE status = 'ready' AND driver_id IS NULL;
+
+-- Safety constraint: Single driver per order (Migration 003_driver_assignment_constraints)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_single_driver_per_order ON orders(id) WHERE driver_id IS NOT NULL AND status NOT IN ('cancelled', 'delivered', 'refunded');
+
+COMMENT ON INDEX idx_orders_available_for_driver IS 'Performance index for driver available orders query (status=ready, driver_id=NULL)';
+COMMENT ON INDEX idx_orders_single_driver_per_order IS 'Safety constraint: Prevents multiple drivers from being assigned to the same active order';
+
+-- Order items indexes
+CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+
+-- Order status history indexes
+CREATE INDEX IF NOT EXISTS idx_order_status_history_order_id ON order_status_history(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_status_history_user_id ON order_status_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_order_status_history_created_at ON order_status_history(created_at DESC);
+
+-- System settings indexes (Migration 003_system_settings)
+CREATE INDEX IF NOT EXISTS idx_system_settings_key ON system_settings(setting_key);
+CREATE INDEX IF NOT EXISTS idx_system_settings_category ON system_settings(category);
+CREATE INDEX IF NOT EXISTS idx_system_settings_editable ON system_settings(is_editable);
+
+-- Messaging system indexes
+CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id);
+CREATE INDEX IF NOT EXISTS idx_messages_recipient_id ON messages(recipient_id);
+CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(sender_id, recipient_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_unread ON messages(recipient_id, read_at) WHERE read_at IS NULL;
+
+-- ============================================================================
+-- FUNCTIONS AND TRIGGERS
+-- ============================================================================
+
+-- Function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Function to automatically log order status changes (Migration 002)
+CREATE OR REPLACE FUNCTION log_order_status_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (TG_OP = 'UPDATE' AND OLD.status IS DISTINCT FROM NEW.status) THEN
+        INSERT INTO order_status_history (order_id, from_status, to_status)
+        VALUES (NEW.id, OLD.status, NEW.status);
+    ELSIF (TG_OP = 'INSERT') THEN
+        INSERT INTO order_status_history (order_id, from_status, to_status)
+        VALUES (NEW.id, NULL, NEW.status);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Triggers for updated_at on all tables
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
+CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_customers_updated_at ON customers;
+CREATE TRIGGER update_customers_updated_at BEFORE UPDATE ON customers
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_customer_addresses_updated_at ON customer_addresses;
+CREATE TRIGGER update_customer_addresses_updated_at BEFORE UPDATE ON customer_addresses
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_vendors_updated_at ON vendors;
+CREATE TRIGGER update_vendors_updated_at BEFORE UPDATE ON vendors
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_vendor_users_updated_at ON vendor_users;
+CREATE TRIGGER update_vendor_users_updated_at BEFORE UPDATE ON vendor_users
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_drivers_updated_at ON drivers;
+CREATE TRIGGER update_drivers_updated_at BEFORE UPDATE ON drivers
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_admins_updated_at ON admins;
+CREATE TRIGGER update_admins_updated_at BEFORE UPDATE ON admins
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_system_settings_updated_at ON system_settings;
+CREATE TRIGGER update_system_settings_updated_at BEFORE UPDATE ON system_settings
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_dashboard_widgets_updated_at ON dashboard_widgets;
+CREATE TRIGGER update_dashboard_widgets_updated_at BEFORE UPDATE ON dashboard_widgets
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_user_role_widgets_updated_at ON user_role_widgets;
+CREATE TRIGGER update_user_role_widgets_updated_at BEFORE UPDATE ON user_role_widgets
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_restaurants_updated_at ON restaurants;
+CREATE TRIGGER update_restaurants_updated_at BEFORE UPDATE ON restaurants
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_menus_updated_at ON menus;
+CREATE TRIGGER update_menus_updated_at BEFORE UPDATE ON menus
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_restaurant_menus_updated_at ON restaurant_menus;
+CREATE TRIGGER update_restaurant_menus_updated_at BEFORE UPDATE ON restaurant_menus
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_vendor_restaurants_updated_at ON vendor_restaurants;
+CREATE TRIGGER update_vendor_restaurants_updated_at BEFORE UPDATE ON vendor_restaurants
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Orders triggers (Migration 002)
+DROP TRIGGER IF EXISTS update_orders_updated_at ON orders;
+CREATE TRIGGER update_orders_updated_at
+    BEFORE UPDATE ON orders
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_order_items_updated_at ON order_items;
+CREATE TRIGGER update_order_items_updated_at
+    BEFORE UPDATE ON order_items
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS trigger_log_order_status_change ON orders;
+CREATE TRIGGER trigger_log_order_status_change
+    AFTER INSERT OR UPDATE OF status ON orders
+    FOR EACH ROW
+    EXECUTE FUNCTION log_order_status_change();
+
+-- Messaging triggers
+DROP TRIGGER IF EXISTS update_messages_updated_at ON messages;
+CREATE TRIGGER update_messages_updated_at BEFORE UPDATE ON messages
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================================
+-- SCHEMA CONSOLIDATION COMPLETE
+-- ============================================================================
+
+-- ============================================================================
+-- DISTANCE API LOGGING
+-- ============================================================================
+
+-- Distance request status enum
+DO $$ BEGIN
+    CREATE TYPE distance_request_status AS ENUM ('success', 'error', 'rate_limited', 'invalid_coordinates', 'timeout');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- Distance API request logs table
+CREATE TABLE IF NOT EXISTS distance_requests (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    origin_address_id INTEGER REFERENCES customer_addresses(id) ON DELETE SET NULL,
+    destination_restaurant_id INTEGER REFERENCES restaurants(id) ON DELETE SET NULL,
+
+    -- Request details
+    origin_latitude DECIMAL(10, 8),
+    origin_longitude DECIMAL(11, 8),
+    destination_latitude DECIMAL(10, 8),
+    destination_longitude DECIMAL(11, 8),
+
+    -- Response details
+    status distance_request_status NOT NULL,
+    distance_meters INTEGER,
+    duration_seconds INTEGER,
+    api_response_time_ms INTEGER,
+    error_message TEXT,
+
+    -- Metadata
+    mapbox_request_id VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for distance_requests
+CREATE INDEX IF NOT EXISTS idx_distance_requests_user_id ON distance_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_distance_requests_origin_address ON distance_requests(origin_address_id);
+CREATE INDEX IF NOT EXISTS idx_distance_requests_destination_restaurant ON distance_requests(destination_restaurant_id);
+CREATE INDEX IF NOT EXISTS idx_distance_requests_created_at ON distance_requests(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_distance_requests_status ON distance_requests(status);
+CREATE INDEX IF NOT EXISTS idx_distance_requests_daily_usage ON distance_requests(created_at) WHERE status = 'success';
+
+COMMENT ON TABLE distance_requests IS 'Logs all Mapbox API distance calculation requests for monitoring, analytics, and rate limit tracking';
+COMMENT ON COLUMN distance_requests.status IS 'Request outcome: success, error, rate_limited, invalid_coordinates, timeout';
+COMMENT ON COLUMN distance_requests.api_response_time_ms IS 'Time taken for Mapbox API to respond in milliseconds';
+
+DO $$
+BEGIN
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'Schema consolidation complete!';
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'Included migrations:';
+    RAISE NOTICE '  - 001: Approval system for vendors and restaurants';
+    RAISE NOTICE '  - 002: Orders, order items, and status tracking';
+    RAISE NOTICE '  - 003 (driver): Driver assignment safety constraints';
+    RAISE NOTICE '  - 003 (settings): System-wide configuration settings';
+    RAISE NOTICE '  - 004: Restaurant hours of operation';
+    RAISE NOTICE '  - add_vendor_to_menus: Menu ownership tracking';
+    RAISE NOTICE '  - 005: Distance API logging and request tracking';
+    RAISE NOTICE '========================================';
+END $$;

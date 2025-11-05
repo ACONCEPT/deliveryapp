@@ -28,7 +28,7 @@ class MenuItemCard extends StatelessWidget {
 
             // Item details
             Padding(
-              padding: const EdgeInsets.all(DashboardConstants.cardPaddingSmall),
+              padding: const EdgeInsets.all(8.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -39,27 +39,27 @@ class MenuItemCard extends StatelessWidget {
                         child: Text(
                           menuItem.name,
                           style: const TextStyle(
-                            fontSize: DashboardConstants.restaurantNameTextSize,
+                            fontSize: 13,
                             fontWeight: FontWeight.bold,
                           ),
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       if (!menuItem.isAvailable)
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
+                            horizontal: 4,
+                            vertical: 2,
                           ),
                           decoration: BoxDecoration(
                             color: Colors.red.shade100,
-                            borderRadius: BorderRadius.circular(4),
+                            borderRadius: BorderRadius.circular(3),
                           ),
                           child: Text(
-                            'Unavailable',
+                            'N/A',
                             style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 8,
                               color: Colors.red.shade700,
                               fontWeight: FontWeight.bold,
                             ),
@@ -67,7 +67,7 @@ class MenuItemCard extends StatelessWidget {
                         ),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
 
                   // Description
                   if (menuItem.description != null &&
@@ -75,72 +75,65 @@ class MenuItemCard extends StatelessWidget {
                     Text(
                       menuItem.description!,
                       style: TextStyle(
-                        fontSize: DashboardConstants.restaurantInfoSmallTextSize,
+                        fontSize: 10,
                         color: Colors.grey.shade600,
                       ),
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
 
                   // Price and add button
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       // Price
                       Text(
                         '\$${menuItem.price.toStringAsFixed(2)}',
                         style: const TextStyle(
-                          fontSize: 16,
+                          fontSize: 14,
                           fontWeight: FontWeight.bold,
                           color: Colors.orange,
                         ),
                       ),
 
-                      // Add button
-                      if (menuItem.isAvailable)
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.orange.shade100,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: IconButton(
-                            icon: const Icon(
-                              Icons.add,
-                              color: Colors.orange,
+                      // Customization indicator and Add button
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (menuItem.customizationOptions != null &&
+                              menuItem.customizationOptions!.isNotEmpty)
+                            Icon(
+                              Icons.tune,
+                              size: 12,
+                              color: Colors.grey.shade500,
                             ),
-                            onPressed: onTap,
-                            padding: const EdgeInsets.all(4),
-                            constraints: const BoxConstraints(),
-                            iconSize: 20,
-                          ),
-                        ),
+                          if (menuItem.customizationOptions != null &&
+                              menuItem.customizationOptions!.isNotEmpty)
+                            const SizedBox(width: 4),
+                          if (menuItem.isAvailable)
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade100,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: IconButton(
+                                icon: const Icon(
+                                  Icons.add,
+                                  color: Colors.orange,
+                                ),
+                                onPressed: onTap,
+                                padding: const EdgeInsets.all(4),
+                                constraints: const BoxConstraints(),
+                                iconSize: 16,
+                                tooltip: 'Add to cart',
+                              ),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
-
-                  // Customization indicator
-                  if (menuItem.customizationOptions != null &&
-                      menuItem.customizationOptions!.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.tune,
-                          size: 14,
-                          color: Colors.grey.shade600,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Customizable',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey.shade600,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -152,7 +145,7 @@ class MenuItemCard extends StatelessWidget {
 
   Widget _buildItemImage() {
     return SizedBox(
-      height: 120,
+      height: 80,
       width: double.infinity,
       child: menuItem.imageUrl != null
           ? Image.network(
@@ -169,7 +162,7 @@ class MenuItemCard extends StatelessWidget {
       color: Colors.grey.shade200,
       child: const Icon(
         Icons.restaurant_menu,
-        size: 48,
+        size: 32,
         color: Colors.grey,
       ),
     );

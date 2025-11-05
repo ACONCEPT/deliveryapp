@@ -1,0 +1,419 @@
+/api/vendor/customization-templates:
+  get:
+    summary: Get all customization templates for vendor
+    description: |
+      Retrieves all customization templates owned by the authenticated vendor,
+      plus all system-wide templates (vendor_id IS NULL).
+    tags:
+      - Customization Templates
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: List of customization templates
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                data:
+                  type: array
+                  items:
+                    $ref: '../schemas/customization_template.yaml#/MenuCustomizationTemplate'
+      '401':
+        $ref: '../responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../responses/errors.yaml#/Forbidden'
+      '500':
+        $ref: '../responses/errors.yaml#/InternalServerError'
+
+  post:
+    summary: Create a new customization template
+    description: |
+      Creates a new customization template owned by the authenticated vendor.
+      The template can be used across all of the vendor's restaurants.
+    tags:
+      - Customization Templates
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/customization_template.yaml#/CreateCustomizationTemplateRequest'
+          examples:
+            spice_level:
+              summary: Spice Level Template
+              value:
+                name: "Spice Level"
+                description: "Choose your preferred spice level"
+                customization_config:
+                  type: "select"
+                  options:
+                    - label: "Mild"
+                      value: "mild"
+                      price: 0
+                    - label: "Medium"
+                      value: "medium"
+                      price: 0
+                    - label: "Hot"
+                      value: "hot"
+                      price: 0
+                    - label: "Extra Hot"
+                      value: "extra_hot"
+                      price: 1.00
+                is_active: true
+            toppings:
+              summary: Pizza Toppings Template
+              value:
+                name: "Pizza Toppings"
+                description: "Add your favorite toppings"
+                customization_config:
+                  type: "multi-select"
+                  max_selections: 5
+                  options:
+                    - label: "Pepperoni"
+                      value: "pepperoni"
+                      price: 2.00
+                    - label: "Mushrooms"
+                      value: "mushrooms"
+                      price: 1.50
+                    - label: "Extra Cheese"
+                      value: "extra_cheese"
+                      price: 1.00
+                is_active: true
+    responses:
+      '201':
+        description: Customization template created successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "Customization template created successfully"
+                data:
+                  $ref: '../schemas/customization_template.yaml#/MenuCustomizationTemplate'
+      '400':
+        $ref: '../responses/errors.yaml#/BadRequest'
+      '401':
+        $ref: '../responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../responses/errors.yaml#/Forbidden'
+      '500':
+        $ref: '../responses/errors.yaml#/InternalServerError'
+
+/api/vendor/customization-templates/{id}:
+  get:
+    summary: Get a customization template by ID
+    description: |
+      Retrieves a specific customization template. Vendor can only access
+      their own templates or system-wide templates.
+    tags:
+      - Customization Templates
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Customization template ID
+    responses:
+      '200':
+        description: Customization template found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                data:
+                  $ref: '../schemas/customization_template.yaml#/MenuCustomizationTemplate'
+      '401':
+        $ref: '../responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../responses/errors.yaml#/Forbidden'
+      '404':
+        $ref: '../responses/errors.yaml#/NotFound'
+      '500':
+        $ref: '../responses/errors.yaml#/InternalServerError'
+
+  put:
+    summary: Update a customization template
+    description: |
+      Updates a customization template owned by the vendor.
+      All fields are optional for partial updates.
+    tags:
+      - Customization Templates
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Customization template ID
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/customization_template.yaml#/UpdateCustomizationTemplateRequest'
+    responses:
+      '200':
+        description: Customization template updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "Customization template updated successfully"
+                data:
+                  $ref: '../schemas/customization_template.yaml#/MenuCustomizationTemplate'
+      '400':
+        $ref: '../responses/errors.yaml#/BadRequest'
+      '401':
+        $ref: '../responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../responses/errors.yaml#/Forbidden'
+      '404':
+        $ref: '../responses/errors.yaml#/NotFound'
+      '500':
+        $ref: '../responses/errors.yaml#/InternalServerError'
+
+  delete:
+    summary: Delete a customization template
+    description: |
+      Deletes a customization template owned by the vendor.
+    tags:
+      - Customization Templates
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Customization template ID
+    responses:
+      '200':
+        description: Customization template deleted successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "Customization template deleted successfully"
+      '401':
+        $ref: '../responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../responses/errors.yaml#/Forbidden'
+      '404':
+        $ref: '../responses/errors.yaml#/NotFound'
+      '500':
+        $ref: '../responses/errors.yaml#/InternalServerError'
+
+/api/admin/customization-templates:
+  get:
+    summary: Get all customization templates (admin only)
+    description: |
+      Retrieves all customization templates in the system (vendor-specific and system-wide).
+    tags:
+      - Customization Templates
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: List of all customization templates
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                data:
+                  type: array
+                  items:
+                    $ref: '../schemas/customization_template.yaml#/MenuCustomizationTemplate'
+      '401':
+        $ref: '../responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../responses/errors.yaml#/Forbidden'
+      '500':
+        $ref: '../responses/errors.yaml#/InternalServerError'
+
+  post:
+    summary: Create a system-wide customization template (admin only)
+    description: |
+      Creates a new system-wide customization template (vendor_id = NULL).
+      System-wide templates are visible to all vendors.
+    tags:
+      - Customization Templates
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/customization_template.yaml#/CreateCustomizationTemplateRequest'
+          examples:
+            size_options:
+              summary: Size Options Template (System-wide)
+              value:
+                name: "Size Options"
+                description: "Choose your preferred size"
+                customization_config:
+                  type: "select"
+                  options:
+                    - label: "Small"
+                      value: "small"
+                      price: 0
+                    - label: "Medium"
+                      value: "medium"
+                      price: 3.00
+                    - label: "Large"
+                      value: "large"
+                      price: 5.00
+                    - label: "Extra Large"
+                      value: "xl"
+                      price: 7.00
+                is_active: true
+    responses:
+      '201':
+        description: System-wide customization template created successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "System-wide customization template created successfully"
+                data:
+                  $ref: '../schemas/customization_template.yaml#/MenuCustomizationTemplate'
+      '400':
+        $ref: '../responses/errors.yaml#/BadRequest'
+      '401':
+        $ref: '../responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../responses/errors.yaml#/Forbidden'
+      '500':
+        $ref: '../responses/errors.yaml#/InternalServerError'
+
+/api/admin/customization-templates/{id}:
+  put:
+    summary: Update any customization template (admin only)
+    description: |
+      Updates any customization template in the system (vendor-specific or system-wide).
+      All fields are optional for partial updates.
+    tags:
+      - Customization Templates
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Customization template ID
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/customization_template.yaml#/UpdateCustomizationTemplateRequest'
+    responses:
+      '200':
+        description: Customization template updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "Customization template updated successfully"
+                data:
+                  $ref: '../schemas/customization_template.yaml#/MenuCustomizationTemplate'
+      '400':
+        $ref: '../responses/errors.yaml#/BadRequest'
+      '401':
+        $ref: '../responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../responses/errors.yaml#/Forbidden'
+      '404':
+        $ref: '../responses/errors.yaml#/NotFound'
+      '500':
+        $ref: '../responses/errors.yaml#/InternalServerError'
+
+  delete:
+    summary: Delete any customization template (admin only)
+    description: |
+      Deletes any customization template in the system.
+    tags:
+      - Customization Templates
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Customization template ID
+    responses:
+      '200':
+        description: Customization template deleted successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "Customization template deleted successfully"
+      '401':
+        $ref: '../responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../responses/errors.yaml#/Forbidden'
+      '404':
+        $ref: '../responses/errors.yaml#/NotFound'
+      '500':
+        $ref: '../responses/errors.yaml#/InternalServerError'

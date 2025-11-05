@@ -179,6 +179,7 @@ class _AdminRestaurantMenusScreenState
         builder: (context) => MenuBuilderScreen(
           token: widget.token,
           menu: menu,
+          userType: widget.user.userType,
         ),
       ),
     );
@@ -205,12 +206,12 @@ class _AdminRestaurantMenusScreenState
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     child: Padding(
-                      padding: EdgeInsets.all(DashboardConstants.screenPadding),
+                      padding: const EdgeInsets.all(DashboardConstants.screenPadding),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildRestaurantHeader(),
-                          SizedBox(height: DashboardConstants.sectionSpacing),
+                          const SizedBox(height: DashboardConstants.sectionSpacing),
                           _buildMenuList(),
                         ],
                       ),
@@ -338,9 +339,9 @@ class _AdminRestaurantMenusScreenState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -561,9 +562,9 @@ class _AdminRestaurantMenusScreenState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

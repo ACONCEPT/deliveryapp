@@ -110,6 +110,7 @@ type Order struct {
 	ID                       int         `json:"id" db:"id"`
 	CustomerID               int         `json:"customer_id" db:"customer_id"`
 	RestaurantID             int         `json:"restaurant_id" db:"restaurant_id"`
+	RestaurantName           string      `json:"restaurant_name" db:"restaurant_name"`
 	DeliveryAddressID        NullInt64   `json:"delivery_address_id" db:"delivery_address_id"`
 	DriverID                 NullInt64   `json:"driver_id" db:"driver_id"`
 	Status                   OrderStatus `json:"status" db:"status"`
@@ -212,16 +213,16 @@ type OrderListResponse struct {
 
 // OrderSummary represents a simplified order for list views
 type OrderSummary struct {
-	ID              int         `json:"id"`
-	CustomerID      int         `json:"customer_id"`
-	RestaurantID    int         `json:"restaurant_id"`
-	RestaurantName  string      `json:"restaurant_name"`
-	Status          OrderStatus `json:"status"`
-	TotalAmount     float64     `json:"total_amount"`
-	ItemCount       int         `json:"item_count"`
-	PlacedAt        *time.Time  `json:"placed_at"`
-	EstimatedTime   *time.Time  `json:"estimated_delivery_time"`
-	CreatedAt       time.Time   `json:"created_at"`
+	ID              int         `json:"id" db:"id"`
+	CustomerID      int         `json:"customer_id" db:"customer_id"`
+	RestaurantID    int         `json:"restaurant_id" db:"restaurant_id"`
+	RestaurantName  string      `json:"restaurant_name" db:"restaurant_name"`
+	Status          OrderStatus `json:"status" db:"status"`
+	TotalAmount     float64     `json:"total_amount" db:"total_amount"`
+	ItemCount       int         `json:"item_count" db:"item_count"`
+	PlacedAt        *time.Time  `json:"placed_at" db:"placed_at"`
+	EstimatedTime   *time.Time  `json:"estimated_delivery_time" db:"estimated_time"`
+	CreatedAt       time.Time   `json:"created_at" db:"created_at"`
 }
 
 // OrderStats represents order statistics (for admin/vendor dashboards)
@@ -241,6 +242,22 @@ type RestaurantInfo struct {
 	Name    string `json:"name"`
 	Phone   string `json:"phone"`
 	Address string `json:"address"`
+}
+
+// DriverOrderInfoResponse represents driver-focused order information
+type DriverOrderInfoResponse struct {
+	OrderID              int         `json:"order_id"`
+	Status               OrderStatus `json:"status"`
+	ItemCount            int         `json:"item_count"`
+	EstimatedPrepTime    *int        `json:"estimated_prep_time"` // in minutes
+	EstimatedDriveTime   *int        `json:"estimated_drive_time"` // in minutes (calculated from distance)
+	TotalAmount          float64     `json:"total_amount"`
+	RestaurantName       string      `json:"restaurant_name"`
+	RestaurantAddress    string      `json:"restaurant_address"`
+	DeliveryAddress      string      `json:"delivery_address"`
+	SpecialInstructions  *string     `json:"special_instructions,omitempty"`
+	PlacedAt             *time.Time  `json:"placed_at,omitempty"`
+	EstimatedDeliveryTime *time.Time `json:"estimated_delivery_time,omitempty"`
 }
 
 // CustomerInfo represents customer details for order response

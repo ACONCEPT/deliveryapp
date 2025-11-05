@@ -16,11 +16,11 @@ type OrderRepository interface {
 	CreateOrder(order *models.Order) error
 	CreateOrderWithItems(order *models.Order, items []models.OrderItem) error
 	GetOrderByID(id int) (*models.Order, error)
-	GetOrdersByCustomerID(customerID int, limit, offset int) ([]models.Order, error)
+	GetOrdersByCustomerID(customerID int, limit, offset int) ([]models.OrderSummary, error)
 	GetOrdersByRestaurantID(restaurantID int, limit, offset int) ([]models.Order, error)
 	GetOrdersByRestaurantIDs(restaurantIDs []int, limit, offset int) ([]models.Order, error)
 	GetOrdersByRestaurantIDsAndStatus(restaurantIDs []int, status models.OrderStatus, limit, offset int) ([]models.Order, error)
-	GetOrdersByDriverID(driverID int, limit, offset int) ([]models.Order, error)
+	GetOrdersByDriverID(driverID int, limit, offset int) ([]models.OrderSummary, error)
 	GetOrdersByStatus(status models.OrderStatus, limit, offset int) ([]models.Order, error)
 	GetOrdersByStatusAndRestaurant(restaurantID int, status models.OrderStatus) ([]models.Order, error)
 	GetAllOrders(filters map[string]interface{}, limit, offset int) ([]models.Order, int, error)
@@ -46,6 +46,7 @@ type OrderRepository interface {
 	// Driver-specific methods
 	GetAvailableOrdersForDriver(limit, offset int) ([]models.Order, error)
 	AssignDriverToOrder(orderID, driverID int) error
+	GetDriverOrderInfo(orderID int) (*models.DriverOrderInfoResponse, error)
 }
 
 // orderRepository is the concrete implementation
@@ -64,22 +65,32 @@ func NewOrderRepository(db *sqlx.DB) OrderRepository {
 
 // CreateOrder creates a new order
 func (r *orderRepository) CreateOrder(order *models.Order) error {
+	// Fetch restaurant name if not already provided
+	if order.RestaurantName == "" {
+		var restaurantName string
+		err := r.db.Get(&restaurantName, "SELECT name FROM restaurants WHERE id = $1", order.RestaurantID)
+		if err != nil {
+			return fmt.Errorf("failed to fetch restaurant name: %w", err)
+		}
+		order.RestaurantName = restaurantName
+	}
+
 	query := `
 		INSERT INTO orders (
-			customer_id, restaurant_id, delivery_address_id, driver_id,
+			customer_id, restaurant_id, restaurant_name, delivery_address_id, driver_id,
 			status, subtotal_amount, tax_amount, delivery_fee, discount_amount, total_amount,
 			placed_at, special_instructions, estimated_preparation_time, estimated_delivery_time
 		) VALUES (
-			$1, $2, $3, $4,
-			$5, $6, $7, $8, $9, $10,
-			$11, $12, $13, $14
+			$1, $2, $3, $4, $5,
+			$6, $7, $8, $9, $10, $11,
+			$12, $13, $14, $15
 		)
 		RETURNING id, created_at, updated_at, is_active
 	`
 
 	err := r.db.QueryRowx(
 		query,
-		order.CustomerID, order.RestaurantID, nullInt64(order.DeliveryAddressID), nullInt64(order.DriverID),
+		order.CustomerID, order.RestaurantID, order.RestaurantName, nullInt64(order.DeliveryAddressID), nullInt64(order.DriverID),
 		order.Status, order.SubtotalAmount, order.TaxAmount, order.DeliveryFee, order.DiscountAmount, order.TotalAmount,
 		nullTime(order.PlacedAt), nullString(order.SpecialInstructions), nullInt64(order.EstimatedPreparationTime), nullTime(order.EstimatedDeliveryTime),
 	).Scan(&order.ID, &order.CreatedAt, &order.UpdatedAt, &order.IsActive)
@@ -99,23 +110,33 @@ func (r *orderRepository) CreateOrderWithItems(order *models.Order, items []mode
 	}
 	defer tx.Rollback()
 
+	// Fetch restaurant name if not already provided
+	if order.RestaurantName == "" {
+		var restaurantName string
+		err := tx.Get(&restaurantName, "SELECT name FROM restaurants WHERE id = $1", order.RestaurantID)
+		if err != nil {
+			return fmt.Errorf("failed to fetch restaurant name: %w", err)
+		}
+		order.RestaurantName = restaurantName
+	}
+
 	// Create order
 	orderQuery := `
 		INSERT INTO orders (
-			customer_id, restaurant_id, delivery_address_id, driver_id,
+			customer_id, restaurant_id, restaurant_name, delivery_address_id, driver_id,
 			status, subtotal_amount, tax_amount, delivery_fee, discount_amount, total_amount,
 			placed_at, special_instructions, estimated_preparation_time, estimated_delivery_time
 		) VALUES (
-			$1, $2, $3, $4,
-			$5, $6, $7, $8, $9, $10,
-			$11, $12, $13, $14
+			$1, $2, $3, $4, $5,
+			$6, $7, $8, $9, $10, $11,
+			$12, $13, $14, $15
 		)
 		RETURNING id, created_at, updated_at, is_active
 	`
 
 	err = tx.QueryRowx(
 		orderQuery,
-		order.CustomerID, order.RestaurantID, nullInt64(order.DeliveryAddressID), nullInt64(order.DriverID),
+		order.CustomerID, order.RestaurantID, order.RestaurantName, nullInt64(order.DeliveryAddressID), nullInt64(order.DriverID),
 		order.Status, order.SubtotalAmount, order.TaxAmount, order.DeliveryFee, order.DiscountAmount, order.TotalAmount,
 		nullTime(order.PlacedAt), nullString(order.SpecialInstructions), nullInt64(order.EstimatedPreparationTime), nullTime(order.EstimatedDeliveryTime),
 	).Scan(&order.ID, &order.CreatedAt, &order.UpdatedAt, &order.IsActive)
@@ -183,10 +204,21 @@ func (r *orderRepository) GetOrderByID(id int) (*models.Order, error) {
 }
 
 // GetOrdersByCustomerID retrieves orders for a specific customer
-func (r *orderRepository) GetOrdersByCustomerID(customerID int, limit, offset int) ([]models.Order, error) {
-	orders := make([]models.Order, 0) // Initialize empty slice instead of nil
+func (r *orderRepository) GetOrdersByCustomerID(customerID int, limit, offset int) ([]models.OrderSummary, error) {
+	orders := make([]models.OrderSummary, 0) // Initialize empty slice instead of nil
 	query := `
-		SELECT * FROM orders
+		SELECT
+			id,
+			customer_id,
+			restaurant_id,
+			restaurant_name,
+			status,
+			total_amount,
+			(SELECT COUNT(*) FROM order_items WHERE order_id = orders.id) as item_count,
+			placed_at,
+			estimated_delivery_time as estimated_time,
+			created_at
+		FROM orders
 		WHERE customer_id = $1 AND is_active = true
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3
@@ -262,11 +294,22 @@ func (r *orderRepository) GetOrdersByRestaurantIDsAndStatus(restaurantIDs []int,
 	return orders, nil
 }
 
-// GetOrdersByDriverID retrieves orders assigned to a specific driver
-func (r *orderRepository) GetOrdersByDriverID(driverID int, limit, offset int) ([]models.Order, error) {
-	orders := make([]models.Order, 0) // Initialize empty slice instead of nil
+// GetOrdersByDriverID retrieves orders assigned to a specific driver with restaurant names
+func (r *orderRepository) GetOrdersByDriverID(driverID int, limit, offset int) ([]models.OrderSummary, error) {
+	orders := make([]models.OrderSummary, 0) // Initialize empty slice instead of nil
 	query := `
-		SELECT * FROM orders
+		SELECT
+			id,
+			customer_id,
+			restaurant_id,
+			restaurant_name,
+			status,
+			total_amount,
+			(SELECT COUNT(*) FROM order_items WHERE order_id = orders.id) as item_count,
+			placed_at,
+			estimated_delivery_time as estimated_time,
+			created_at
+		FROM orders
 		WHERE driver_id = $1 AND is_active = true
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3
@@ -373,31 +416,32 @@ func (r *orderRepository) UpdateOrder(order *models.Order) error {
 	query := `
 		UPDATE orders SET
 			restaurant_id = $2,
-			delivery_address_id = $3,
-			driver_id = $4,
-			status = $5,
-			subtotal_amount = $6,
-			tax_amount = $7,
-			delivery_fee = $8,
-			discount_amount = $9,
-			total_amount = $10,
-			placed_at = $11,
-			confirmed_at = $12,
-			ready_at = $13,
-			delivered_at = $14,
-			cancelled_at = $15,
-			special_instructions = $16,
-			cancellation_reason = $17,
-			estimated_preparation_time = $18,
-			estimated_delivery_time = $19,
-			is_active = $20
+			restaurant_name = $3,
+			delivery_address_id = $4,
+			driver_id = $5,
+			status = $6,
+			subtotal_amount = $7,
+			tax_amount = $8,
+			delivery_fee = $9,
+			discount_amount = $10,
+			total_amount = $11,
+			placed_at = $12,
+			confirmed_at = $13,
+			ready_at = $14,
+			delivered_at = $15,
+			cancelled_at = $16,
+			special_instructions = $17,
+			cancellation_reason = $18,
+			estimated_preparation_time = $19,
+			estimated_delivery_time = $20,
+			is_active = $21
 		WHERE id = $1
 		RETURNING updated_at
 	`
 
 	err := r.db.QueryRowx(
 		query,
-		order.ID, order.RestaurantID, nullInt64(order.DeliveryAddressID), nullInt64(order.DriverID),
+		order.ID, order.RestaurantID, order.RestaurantName, nullInt64(order.DeliveryAddressID), nullInt64(order.DriverID),
 		order.Status, order.SubtotalAmount, order.TaxAmount, order.DeliveryFee, order.DiscountAmount, order.TotalAmount,
 		nullTime(order.PlacedAt), nullTime(order.ConfirmedAt), nullTime(order.ReadyAt), nullTime(order.DeliveredAt), nullTime(order.CancelledAt),
 		nullString(order.SpecialInstructions), nullString(order.CancellationReason),
@@ -906,4 +950,124 @@ func (r *orderRepository) AssignDriverToOrder(orderID, driverID int) error {
 	}
 
 	return nil
+}
+
+// GetDriverOrderInfo retrieves driver-specific order information including item count and addresses
+func (r *orderRepository) GetDriverOrderInfo(orderID int) (*models.DriverOrderInfoResponse, error) {
+	query := `
+		SELECT
+			o.id as order_id,
+			o.status,
+			COUNT(oi.id) as item_count,
+			o.estimated_preparation_time,
+			o.total_amount,
+			r.name as restaurant_name,
+			COALESCE(r.address_line_1 || ', ' || r.city || ', ' || r.state || ' ' || r.zip_code, '') as restaurant_address,
+			COALESCE(ca.address_line_1 || ', ' || ca.city || ', ' || ca.state || ' ' || ca.zip_code, '') as delivery_address,
+			o.special_instructions,
+			o.placed_at,
+			o.estimated_delivery_time,
+			r.latitude as restaurant_lat,
+			r.longitude as restaurant_lng,
+			ca.latitude as delivery_lat,
+			ca.longitude as delivery_lng
+		FROM orders o
+		LEFT JOIN order_items oi ON o.id = oi.order_id
+		LEFT JOIN restaurants r ON o.restaurant_id = r.id
+		LEFT JOIN customer_addresses ca ON o.delivery_address_id = ca.id
+		WHERE o.id = $1
+		GROUP BY o.id, r.name, r.address_line_1, r.city, r.state, r.zip_code,
+				 ca.address_line_1, ca.city, ca.state, ca.zip_code,
+				 r.latitude, r.longitude, ca.latitude, ca.longitude
+	`
+
+	var (
+		response           models.DriverOrderInfoResponse
+		prepTime           sql.NullInt64
+		specialInstructions sql.NullString
+		placedAt           sql.NullTime
+		estimatedDelivery  sql.NullTime
+		restaurantLat      sql.NullFloat64
+		restaurantLng      sql.NullFloat64
+		deliveryLat        sql.NullFloat64
+		deliveryLng        sql.NullFloat64
+	)
+
+	err := r.db.QueryRow(query, orderID).Scan(
+		&response.OrderID,
+		&response.Status,
+		&response.ItemCount,
+		&prepTime,
+		&response.TotalAmount,
+		&response.RestaurantName,
+		&response.RestaurantAddress,
+		&response.DeliveryAddress,
+		&specialInstructions,
+		&placedAt,
+		&estimatedDelivery,
+		&restaurantLat,
+		&restaurantLng,
+		&deliveryLat,
+		&deliveryLng,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("order not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get driver order info: %w", err)
+	}
+
+	// Convert nullable fields
+	if prepTime.Valid {
+		prepTimeInt := int(prepTime.Int64)
+		response.EstimatedPrepTime = &prepTimeInt
+	}
+	if specialInstructions.Valid {
+		response.SpecialInstructions = &specialInstructions.String
+	}
+	if placedAt.Valid {
+		response.PlacedAt = &placedAt.Time
+	}
+	if estimatedDelivery.Valid {
+		response.EstimatedDeliveryTime = &estimatedDelivery.Time
+	}
+
+	// Calculate estimated drive time based on distance (if coordinates available)
+	// Using simple estimation: assume average speed of 30 mph in city driving
+	// This is a placeholder - in production you'd use a real routing API like Google Maps
+	if restaurantLat.Valid && restaurantLng.Valid && deliveryLat.Valid && deliveryLng.Valid {
+		// Simple straight-line distance approximation
+		// At mid-latitudes, 1 degree latitude ≈ 69 miles
+		latDiff := deliveryLat.Float64 - restaurantLat.Float64
+		lngDiff := deliveryLng.Float64 - restaurantLng.Float64
+
+		// Pythagorean theorem for approximate distance
+		// Note: This is simplified and assumes flat earth (good enough for short distances)
+		distanceDegrees := latDiff*latDiff + lngDiff*lngDiff
+		
+		// Convert to miles (rough approximation)
+		// For small distances, we can estimate sqrt(x) ≈ x/2 when x is small
+		var distanceMiles float64
+		if distanceDegrees < 0.01 {
+			distanceMiles = 69.0 * distanceDegrees * 0.7 // rough sqrt approximation
+		} else {
+			// For larger distances, use a better approximation
+			// This is still simplified but more accurate
+			distanceMiles = 69.0 * distanceDegrees
+		}
+
+		// Estimate drive time: 30 mph = 0.5 miles per minute
+		// Add 5 minutes buffer for traffic/stops
+		driveTimeMinutes := int(distanceMiles*2) + 5
+		if driveTimeMinutes < 1 {
+			driveTimeMinutes = 1 // minimum 1 minute
+		}
+		if driveTimeMinutes > 120 {
+			driveTimeMinutes = 120 // cap at 2 hours
+		}
+		response.EstimatedDriveTime = &driveTimeMinutes
+	}
+
+	return &response, nil
 }

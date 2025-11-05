@@ -51,19 +51,31 @@ type ApprovalActionRequest struct {
 
 // ApprovalDashboardResponse provides summary counts for admin dashboard
 type ApprovalDashboardResponse struct {
-	PendingVendors     int `json:"pending_vendors"`
-	PendingRestaurants int `json:"pending_restaurants"`
-	ApprovedVendors    int `json:"approved_vendors"`
+	PendingVendors      int `json:"pending_vendors"`
+	PendingRestaurants  int `json:"pending_restaurants"`
+	PendingDrivers      int `json:"pending_drivers"`
+	ApprovedVendors     int `json:"approved_vendors"`
 	ApprovedRestaurants int `json:"approved_restaurants"`
-	RejectedVendors    int `json:"rejected_vendors"`
+	ApprovedDrivers     int `json:"approved_drivers"`
+	RejectedVendors     int `json:"rejected_vendors"`
 	RejectedRestaurants int `json:"rejected_restaurants"`
+	RejectedDrivers     int `json:"rejected_drivers"`
 }
 
 // VendorApprovalStatusResponse provides status info for a vendor
 type VendorApprovalStatusResponse struct {
-	VendorID          int            `json:"vendor_id"`
-	ApprovalStatus    ApprovalStatus `json:"approval_status"`
-	RejectionReason   *string        `json:"rejection_reason,omitempty"`
-	ApprovedAt        *time.Time     `json:"approved_at,omitempty"`
-	CanCreateRestaurants bool        `json:"can_create_restaurants"`
+	VendorID             int            `json:"vendor_id"`
+	ApprovalStatus       ApprovalStatus `json:"approval_status"`
+	RejectionReason      *string        `json:"rejection_reason,omitempty"`
+	ApprovedAt           *time.Time     `json:"approved_at,omitempty"`
+	CanCreateRestaurants bool           `json:"can_create_restaurants"`
+}
+
+// DriverApprovalStatusResponse provides status info for a driver
+type DriverApprovalStatusResponse struct {
+	DriverID         int            `json:"driver_id"`
+	ApprovalStatus   ApprovalStatus `json:"approval_status"`
+	RejectionReason  *string        `json:"rejection_reason,omitempty"`
+	ApprovedAt       *time.Time     `json:"approved_at,omitempty"`
+	CanAcceptOrders  bool           `json:"can_accept_orders"`
 }

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'screens/login_screen.dart';
@@ -7,17 +8,56 @@ import 'providers/cart_provider.dart';
 import 'services/http_client_service.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  print('🚀 main() called - Starting app initialization');
 
-  // Initialize auth provider and restore session
-  final authProvider = AuthProvider();
-  await authProvider.initialize();
+  try {
+    print('  Initializing WidgetsFlutterBinding...');
+    WidgetsFlutterBinding.ensureInitialized();
+    print('  ✅ WidgetsFlutterBinding initialized');
 
-  // Initialize HttpClientService with AuthProvider
-  final httpClient = HttpClientService();
-  httpClient.setAuthProvider(authProvider);
+    // Initialize auth provider and restore session
+    print('  Creating AuthProvider...');
+    final authProvider = AuthProvider();
+    print('  ✅ AuthProvider created');
 
-  runApp(DeliveryApp(authProvider: authProvider));
+    print('  Calling authProvider.initialize()...');
+    await authProvider.initialize();
+    print('  ✅ authProvider.initialize() completed');
+
+    // Initialize HttpClientService with AuthProvider
+    print('  Creating HttpClientService...');
+    final httpClient = HttpClientService();
+    print('  Setting AuthProvider in HttpClientService...');
+    httpClient.setAuthProvider(authProvider);
+    print('  ✅ HttpClientService configured');
+
+    print('  Calling runApp...');
+    runApp(DeliveryApp(authProvider: authProvider));
+    print('  ✅ runApp called');
+  } catch (e, stackTrace) {
+    print('❌ ERROR in main(): $e');
+    print('Stack trace: $stackTrace');
+    // Still try to run the app even if initialization fails
+    runApp(MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error, color: Colors.red, size: 64),
+              SizedBox(height: 16),
+              Text('App Initialization Error', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              SizedBox(height: 8),
+              Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('$e', textAlign: TextAlign.center),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ));
+  }
 }
 
 class DeliveryApp extends StatelessWidget {
@@ -76,13 +116,37 @@ class DeliveryApp extends StatelessWidget {
         ),
         home: Consumer<AuthProvider>(
           builder: (context, auth, _) {
+            print('');
+            print('═══════════════════════════════════════════════════');
+            print('🔄 [Main Consumer] Building/Rebuilding UI');
+            print('═══════════════════════════════════════════════════');
+            print('  isInitialized: ${auth.isInitialized}');
+            print('  isAuthenticated: ${auth.isAuthenticated}');
+            print('  user: ${auth.user?.username ?? "null"}');
+            print('  token: ${auth.token != null ? '${auth.token!.substring(0, math.min(20, auth.token!.length))}...' : 'null'}');
+            print('═══════════════════════════════════════════════════');
+
             if (!auth.isInitialized) {
-              return const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
+              print('➡️  Decision: Showing LOADING screen (not initialized)');
+              print('═══════════════════════════════════════════════════');
+              return Scaffold(
+                backgroundColor: Colors.white,
+                body: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('Initializing...', style: TextStyle(fontSize: 16)),
+                    ],
+                  ),
+                ),
               );
             }
 
             if (auth.isAuthenticated && auth.user != null) {
+              print('➡️  Decision: Showing CONFIRMATION screen (authenticated)');
+              print('═══════════════════════════════════════════════════');
               return ConfirmationScreen(
                 user: auth.user!,
                 profile: auth.profile,
@@ -90,6 +154,8 @@ class DeliveryApp extends StatelessWidget {
               );
             }
 
+            print('➡️  Decision: Showing LOGIN screen (not authenticated)');
+            print('═══════════════════════════════════════════════════');
             return const LoginScreen();
           },
         ),

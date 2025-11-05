@@ -3,7 +3,9 @@ package handlers
 import (
 	"delivery_app/backend/middleware"
 	"delivery_app/backend/models"
+	"delivery_app/backend/utils"
 	"encoding/json"
+	"log"
 	"net/http"
 )
 
@@ -122,6 +124,30 @@ func (h *Handler) GetRestaurants(w http.ResponseWriter, r *http.Request) {
 			sendErrorWithContext(w, r, http.StatusInternalServerError, "Failed to retrieve restaurants", err)
 			return
 		}
+
+		// Filter by operating hours - only show restaurants that are currently open
+		openRestaurants := make([]models.Restaurant, 0)
+		for _, restaurant := range restaurants {
+			isOpen, err := utils.IsRestaurantOpen(restaurant.HoursOfOperation, restaurant.Timezone)
+			if err != nil {
+				// Log the error but continue processing
+				log.Printf("[Hours Filter] Error checking hours for restaurant %d (%s): %v",
+					restaurant.ID, restaurant.Name, err)
+				// If there's an error checking hours, include the restaurant to avoid hiding it
+				openRestaurants = append(openRestaurants, restaurant)
+				continue
+			}
+
+			if isOpen {
+				openRestaurants = append(openRestaurants, restaurant)
+			} else {
+				// Log when restaurants are filtered out for debugging
+				log.Printf("[Hours Filter] Restaurant %d (%s) is currently closed",
+					restaurant.ID, restaurant.Name)
+			}
+		}
+
+		restaurants = openRestaurants
 
 	default:
 		sendError(w, http.StatusForbidden, "Access denied")

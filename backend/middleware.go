@@ -42,19 +42,62 @@ func CORSMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// LoggingMiddleware logs incoming requests
+// responseWriter wraps http.ResponseWriter to capture status code
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+	written    bool
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	if !rw.written {
+		rw.statusCode = code
+		rw.written = true
+		rw.ResponseWriter.WriteHeader(code)
+	}
+}
+
+func (rw *responseWriter) Write(b []byte) (int, error) {
+	if !rw.written {
+		rw.WriteHeader(http.StatusOK)
+	}
+	return rw.ResponseWriter.Write(b)
+}
+
+// LoggingMiddleware logs incoming requests with status codes
 func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+
+		// Wrap response writer to capture status code
+		wrapped := &responseWriter{
+			ResponseWriter: w,
+			statusCode:     http.StatusOK,
+			written:        false,
+		}
 
 		// Log request
 		log.Printf("[%s] %s %s", r.Method, r.URL.Path, r.RemoteAddr)
 
 		// Call next handler
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(wrapped, r)
 
-		// Log duration
-		log.Printf("[%s] %s completed in %v", r.Method, r.URL.Path, time.Since(start))
+		// Log duration with status code
+		duration := time.Since(start)
+		statusCode := wrapped.statusCode
+
+		// Use different log formats based on status code
+		if statusCode >= 500 {
+			log.Printf("[%s] %s completed in %v - ❌ %d (Server Error)", r.Method, r.URL.Path, duration, statusCode)
+		} else if statusCode >= 400 {
+			log.Printf("[%s] %s completed in %v - ⚠️  %d (Client Error)", r.Method, r.URL.Path, duration, statusCode)
+		} else if statusCode >= 300 {
+			log.Printf("[%s] %s completed in %v - ↪️  %d (Redirect)", r.Method, r.URL.Path, duration, statusCode)
+		} else if statusCode >= 200 {
+			log.Printf("[%s] %s completed in %v - ✅ %d (Success)", r.Method, r.URL.Path, duration, statusCode)
+		} else {
+			log.Printf("[%s] %s completed in %v - ❓ %d", r.Method, r.URL.Path, duration, statusCode)
+		}
 	})
 }
 

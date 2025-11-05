@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/order.dart';
 import '../../services/order_service.dart';
+import '../../services/restaurant_service.dart';
 import '../../config/dashboard_constants.dart';
 import '../../widgets/order/order_status_badge.dart';
+import '../../widgets/order/prep_time_input_dialog.dart';
 
 /// Screen displaying detailed information about a vendor order with status update functionality
 class VendorOrderDetailScreen extends StatefulWidget {
@@ -22,6 +24,7 @@ class VendorOrderDetailScreen extends StatefulWidget {
 
 class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
   final OrderService _orderService = OrderService();
+  final RestaurantService _restaurantService = RestaurantService();
   Order? _order;
   bool _isLoading = false;
   bool _isUpdatingStatus = false;
@@ -53,53 +56,73 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
     }
   }
 
+  /// Updates order status with special handling for confirmation flow
+  ///
+  /// When confirming an order (pending -> confirmed), shows a prep time input dialog
+  /// to allow the vendor to specify estimated preparation time.
+  ///
+  /// For other status transitions, shows a simple confirmation dialog.
   Future<void> _updateOrderStatus(OrderStatus newStatus) async {
     if (_order == null) return;
 
-    // Show confirmation dialog
-    final confirmed = await _showStatusUpdateConfirmDialog(newStatus);
+    // Special handling for confirming orders - collect prep time
+    if (newStatus == OrderStatus.confirmed && _order!.status == OrderStatus.pending) {
+      await _confirmOrderWithPrepTime();
+      return;
+    }
+
+    // For other status updates, use simple confirmation dialog
+    final confirmed = await _showSimpleConfirmDialog(newStatus);
     if (!confirmed) return;
 
-    setState(() {
-      _isUpdatingStatus = true;
-    });
+    await _performStatusUpdate(newStatus);
+  }
+
+  /// Shows prep time input dialog and confirms order with specified prep time
+  Future<void> _confirmOrderWithPrepTime() async {
+    if (_order == null) return;
 
     try {
-      await _orderService.updateVendorOrderStatus(
-        widget.orderId,
-        newStatus,
+      // Fetch average prep time for this restaurant
+      final averagePrepTime = await _restaurantService.getAveragePrepTime(
+        widget.token,
+        _order!.restaurantId,
       );
 
-      // Reload order to get updated data
-      await _loadOrderDetails();
+      if (!mounted) return;
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Order status updated to ${newStatus.displayName}'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+      // Show prep time input dialog
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => PrepTimeInputDialog(
+          averagePrepTime: averagePrepTime,
+          onCancel: () => Navigator.pop(dialogContext),
+          onConfirm: (prepTimeMinutes) {
+            // Close dialog first
+            Navigator.pop(dialogContext);
+            // Then perform the status update with prep time
+            _performStatusUpdate(
+              OrderStatus.confirmed,
+              estimatedPrepTimeMinutes: prepTimeMinutes,
+            );
+          },
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to update status: ${e.toString()}'),
+            content: Text('Failed to load prep time: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
       }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isUpdatingStatus = false;
-        });
-      }
     }
   }
 
-  Future<bool> _showStatusUpdateConfirmDialog(OrderStatus newStatus) async {
+  /// Shows simple confirmation dialog for non-confirmation status updates
+  Future<bool> _showSimpleConfirmDialog(OrderStatus newStatus) async {
     return await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -123,6 +146,55 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
         ],
       ),
     ) ?? false;
+  }
+
+  /// Performs the actual API call to update order status
+  Future<void> _performStatusUpdate(
+    OrderStatus newStatus, {
+    int? estimatedPrepTimeMinutes,
+  }) async {
+    setState(() {
+      _isUpdatingStatus = true;
+    });
+
+    try {
+      await _orderService.updateVendorOrderStatus(
+        widget.orderId,
+        newStatus,
+        estimatedPrepTimeMinutes: estimatedPrepTimeMinutes,
+      );
+
+      // Reload order to get updated data
+      await _loadOrderDetails();
+
+      if (mounted) {
+        final message = estimatedPrepTimeMinutes != null
+            ? 'Order confirmed with $estimatedPrepTimeMinutes min prep time'
+            : 'Order status updated to ${newStatus.displayName}';
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update status: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUpdatingStatus = false;
+        });
+      }
+    }
   }
 
   List<OrderStatus> _getAvailableNextStatuses() {
@@ -360,11 +432,11 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Icon(Icons.shopping_bag, size: 20, color: Colors.deepOrange),
-                const SizedBox(width: 8),
-                const Text(
+            const Row(
+              children: <Widget>[
+                Icon(Icons.shopping_bag, size: 20, color: Colors.deepOrange),
+                SizedBox(width: 8),
+                Text(
                   'Order Items',
                   style: TextStyle(
                     fontSize: 16,
@@ -460,11 +532,11 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Icon(Icons.payments, size: 20, color: Colors.deepOrange),
-                const SizedBox(width: 8),
-                const Text(
+            const Row(
+              children: <Widget>[
+                Icon(Icons.payments, size: 20, color: Colors.deepOrange),
+                SizedBox(width: 8),
+                Text(
                   'Price Breakdown',
                   style: TextStyle(
                     fontSize: 16,

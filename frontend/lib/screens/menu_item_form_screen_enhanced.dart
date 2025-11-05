@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:developer' as developer;
 import '../models/menu.dart';
+import '../models/customization_template.dart';
+import '../services/customization_template_service.dart';
 import '../widgets/menu_item_builders.dart';
 import '../widgets/image_upload_field.dart';
 
@@ -17,12 +20,14 @@ import '../widgets/image_upload_field.dart';
 /// - Additional metadata (calories, prep time, spice level)
 class MenuItemFormScreenEnhanced extends StatefulWidget {
   final MenuItem? item;
-  final String? token; // JWT token for image upload
+  final String? token; // JWT token for image upload and template import
+  final String? userType; // User type for template import (admin/vendor)
 
   const MenuItemFormScreenEnhanced({
     super.key,
     this.item,
     this.token,
+    this.userType,
   });
 
   @override
@@ -60,6 +65,12 @@ class _MenuItemFormScreenEnhancedState
   @override
   void initState() {
     super.initState();
+
+    // Debug logging for template import button visibility
+    developer.log(
+      'MenuItemFormScreenEnhanced initialized - token: ${widget.token != null ? "present" : "null"}, userType: ${widget.userType ?? "null"}',
+      name: 'MenuItemFormScreenEnhanced',
+    );
 
     // Initialize basic fields
     _nameController = TextEditingController(text: widget.item?.name ?? '');
@@ -115,6 +126,132 @@ class _MenuItemFormScreenEnhancedState
     _prepTimeController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  /// Import customization template dialog
+  Future<void> _importTemplate() async {
+    if (widget.token == null || widget.userType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Template import requires authentication'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Fetch available templates
+      final templateService = CustomizationTemplateService();
+      final templates = widget.userType == 'admin'
+          ? await templateService.getAdminTemplates(widget.token!)
+          : await templateService.getVendorTemplates(widget.token!);
+
+      if (!mounted) return;
+
+      if (templates.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No templates available'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // Show template selection dialog
+      final selected = await showDialog<CustomizationTemplate>(
+        context: context,
+        builder: (context) => _TemplateSelectionDialog(templates: templates),
+      );
+
+      if (selected == null || !mounted) return;
+
+      // Convert CustomizationTemplate to CustomizationOption
+      try {
+        developer.log(
+          'Importing template: ${selected.name}, type: ${selected.type}',
+          name: 'MenuItemFormScreenEnhanced._importTemplate',
+        );
+
+        // Convert SimpleCustomizationOption list to CustomizationChoice list
+        List<CustomizationChoice>? choices;
+        if (selected.type != 'text_input' && selected.options.isNotEmpty) {
+          choices = selected.options.map((simpleOption) {
+            return CustomizationChoice(
+              id: simpleOption.name.toLowerCase().replaceAll(' ', '_'),
+              name: simpleOption.name,
+              priceModifier: simpleOption.priceModifier,
+            );
+          }).toList();
+        }
+
+        // Create CustomizationOption from template data
+        final option = CustomizationOption(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          name: selected.name,
+          type: selected.type,
+          required: selected.required,
+          maxSelections: selected.maxSelections,
+          maxLength: selected.maxLength,
+          placeholder: selected.placeholder,
+          choices: choices,
+        );
+
+        developer.log(
+          'Created option: ${option.name}, type: ${option.type}, choices: ${option.choices?.length ?? 0}',
+          name: 'MenuItemFormScreenEnhanced._importTemplate',
+        );
+        developer.log(
+          'Current customization options count BEFORE add: ${_customizationOptions.length}',
+          name: 'MenuItemFormScreenEnhanced._importTemplate',
+        );
+
+        // Create a NEW list to ensure the reference changes
+        // This triggers didUpdateWidget in CustomizationOptionsBuilder
+        setState(() {
+          _customizationOptions = [..._customizationOptions, option];
+        });
+
+        developer.log(
+          'Current customization options count AFTER add: ${_customizationOptions.length}',
+          name: 'MenuItemFormScreenEnhanced._importTemplate',
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Imported template: ${selected.name}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } catch (e) {
+        developer.log(
+          'Error importing template: $e',
+          name: 'MenuItemFormScreenEnhanced',
+          error: e,
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Failed to import template: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      developer.log(
+        'Error fetching templates: $e',
+        name: 'MenuItemFormScreenEnhanced',
+        error: e,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Failed to load templates: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _save() {
@@ -259,8 +396,24 @@ class _MenuItemFormScreenEnhancedState
               ),
               const SizedBox(height: 24),
 
-              // Customization Options Section
-              _buildSectionHeader('Customization Options'),
+              // Customization Options Section with Import Button
+              Row(
+                children: [
+                  Expanded(child: _buildSectionHeader('Customization Options')),
+                  if (widget.token != null && widget.userType != null)
+                    OutlinedButton.icon(
+                      onPressed: _importTemplate,
+                      icon: const Icon(Icons.download, size: 18),
+                      label: const Text('Import Template'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
               const SizedBox(height: 12),
               CustomizationOptionsBuilder(
                 options: _customizationOptions,
@@ -533,6 +686,92 @@ class _MenuItemFormScreenEnhancedState
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Template Selection Dialog
+///
+/// Displays a list of available customization templates for import
+class _TemplateSelectionDialog extends StatelessWidget {
+  final List<CustomizationTemplate> templates;
+
+  const _TemplateSelectionDialog({required this.templates});
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Import Customization Template'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: ListView.separated(
+          shrinkWrap: true,
+          itemCount: templates.length,
+          separatorBuilder: (context, index) => const Divider(),
+          itemBuilder: (context, index) {
+            final template = templates[index];
+            return ListTile(
+              leading: Icon(
+                Icons.layers,
+                color: template.isSystemWide ? Colors.blue : Colors.orange,
+              ),
+              title: Text(template.name),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (template.description != null)
+                    Text(
+                      template.description!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      if (template.isSystemWide)
+                        Chip(
+                          label: const Text(
+                            'System-wide',
+                            style: TextStyle(fontSize: 10),
+                          ),
+                          backgroundColor: Colors.blue.shade100,
+                          labelStyle: TextStyle(color: Colors.blue.shade900),
+                          padding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      if (template.isSystemWide) const SizedBox(width: 8),
+                      Chip(
+                        label: Text(
+                          template.isActive ? 'Active' : 'Inactive',
+                          style: const TextStyle(fontSize: 10),
+                        ),
+                        backgroundColor: template.isActive
+                            ? Colors.green.shade100
+                            : Colors.grey.shade300,
+                        labelStyle: TextStyle(
+                          color: template.isActive
+                              ? Colors.green.shade900
+                              : Colors.grey.shade700,
+                        ),
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () => Navigator.pop(context, template),
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+      ],
     );
   }
 }

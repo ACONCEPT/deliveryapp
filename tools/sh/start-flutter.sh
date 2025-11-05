@@ -23,6 +23,13 @@ if ! command -v flutter &> /dev/null; then
     exit 1
 fi
 
+# Create user-owned temp directory if TMPDIR has permission issues
+if [ ! -w "$TMPDIR" ]; then
+    echo "⚠️  System temp directory not writable, using alternate location..."
+    export TMPDIR="$HOME/.flutter-tmp"
+    mkdir -p "$TMPDIR"
+fi
+
 echo "📦 Getting Flutter dependencies..."
 flutter pub get
 

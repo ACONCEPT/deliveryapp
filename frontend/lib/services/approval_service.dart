@@ -85,6 +85,49 @@ class ApprovalService extends BaseService {
     }
   }
 
+  /// Get all pending drivers awaiting approval
+  ///
+  /// Returns list of drivers with pending approval status.
+  /// Requires admin authentication token.
+  Future<List<DriverWithApproval>> getPendingDrivers(String token) async {
+    try {
+      final response = await httpClient.get(
+        '/api/admin/approvals/drivers',
+        headers: authHeaders(token),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        // Handle both array and object with data field
+        List<dynamic> driversJson;
+        if (data is List) {
+          driversJson = data;
+        } else if (data is Map && data['drivers'] != null) {
+          driversJson = data['drivers'] as List;
+        } else if (data is Map && data['data'] != null) {
+          driversJson = data['data'] as List;
+        } else {
+          driversJson = [];
+        }
+
+        return driversJson
+            .map((json) => DriverWithApproval.fromJson(json as Map<String, dynamic>))
+            .toList();
+      } else {
+        throw Exception('Failed to load pending drivers: ${response.statusCode}');
+      }
+    } catch (e, stackTrace) {
+      developer.log(
+        'Error in getPendingDrivers',
+        name: serviceName,
+        error: e,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
   /// Get all pending restaurants awaiting approval
   ///
   /// Returns list of restaurants with pending approval status.
@@ -189,6 +232,38 @@ class ApprovalService extends BaseService {
         body: ApprovalActionRequest(reason: reason).toJson(),
       ),
       'reject restaurant',
+    );
+  }
+
+  /// Approve a driver
+  ///
+  /// Approves the driver with the given [driverId].
+  /// Optional [reason] can be provided for approval notes.
+  /// Requires admin authentication token.
+  Future<void> approveDriver(String token, int driverId, {String? reason}) {
+    return executeVoidOperation(
+      () => httpClient.put(
+        '/api/admin/drivers/$driverId/approve',
+        headers: authHeaders(token),
+        body: ApprovalActionRequest(reason: reason).toJson(),
+      ),
+      'approve driver',
+    );
+  }
+
+  /// Reject a driver with a reason
+  ///
+  /// Rejects the driver with the given [driverId].
+  /// [reason] is required for rejection to explain the decision.
+  /// Requires admin authentication token.
+  Future<void> rejectDriver(String token, int driverId, {required String reason}) {
+    return executeVoidOperation(
+      () => httpClient.put(
+        '/api/admin/drivers/$driverId/reject',
+        headers: authHeaders(token),
+        body: ApprovalActionRequest(reason: reason).toJson(),
+      ),
+      'reject driver',
     );
   }
 

@@ -251,20 +251,7 @@ func (h *Handler) DeleteMenu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if menu is assigned to restaurants
-	isAssigned, count, err := h.App.Deps.Menus.IsMenuAssignedToRestaurants(menuID)
-	if err != nil {
-		sendErrorWithContext(w, r, http.StatusInternalServerError, "Failed to check menu assignments", err)
-		return
-	}
-
-	if isAssigned {
-		sendError(w, http.StatusConflict,
-			"Cannot delete menu: it is assigned to "+strconv.Itoa(count)+" restaurant(s)")
-		return
-	}
-
-	// Delete menu
+	// Delete menu (database CASCADE will automatically remove restaurant_menus assignments)
 	if err := h.App.Deps.Menus.Delete(menuID); err != nil {
 		sendErrorWithContext(w, r, http.StatusInternalServerError, "Failed to delete menu", err)
 		return

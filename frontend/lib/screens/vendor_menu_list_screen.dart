@@ -9,11 +9,13 @@ import 'menu_form_screen.dart';
 class VendorMenuListScreen extends StatefulWidget {
   final String token;
   final Restaurant? restaurant; // Optional: if provided, filter menus for this restaurant
+  final String? userType; // User type for template import (typically 'vendor')
 
   const VendorMenuListScreen({
     super.key,
     required this.token,
     this.restaurant,
+    this.userType,
   });
 
   @override
@@ -133,6 +135,7 @@ class _VendorMenuListScreenState extends State<VendorMenuListScreen> {
         builder: (context) => MenuFormScreen(
           token: widget.token,
           restaurant: widget.restaurant, // Pass restaurant to auto-assign
+          userType: widget.userType,
         ),
       ),
     );
@@ -150,6 +153,7 @@ class _VendorMenuListScreenState extends State<VendorMenuListScreen> {
         builder: (context) => MenuFormScreen(
           token: widget.token,
           menu: menu,
+          userType: widget.userType,
         ),
       ),
     );

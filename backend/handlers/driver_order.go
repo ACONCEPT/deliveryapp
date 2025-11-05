@@ -351,3 +351,49 @@ func (h *Handler) UpdateDriverOrderStatus(w http.ResponseWriter, r *http.Request
 		"status":   req.Status,
 	})
 }
+
+// GetDriverOrderInfo retrieves driver-focused order information for a specific order
+func (h *Handler) GetDriverOrderInfo(w http.ResponseWriter, r *http.Request) {
+	// Get authenticated user
+	user := middleware.MustGetUserFromContext(r.Context())
+
+	// Get driver profile
+	driver, err := h.App.Deps.Users.GetDriverByUserID(user.UserID)
+	if err != nil {
+		sendError(w, http.StatusNotFound, "Driver profile not found")
+		return
+	}
+
+	// Get order ID from URL
+	vars := mux.Vars(r)
+	orderID, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid order ID")
+		return
+	}
+
+	// Get order to verify driver assignment
+	order, err := h.App.Deps.Orders.GetOrderByID(orderID)
+	if err != nil {
+		sendError(w, http.StatusNotFound, "Order not found")
+		return
+	}
+
+	// Verify driver is assigned to this order (or order is available for assignment)
+	if order.Status != models.OrderStatusReady {
+		// If not ready, must be assigned to this driver
+		if !order.DriverID.Valid || order.DriverID.Int64 != int64(driver.ID) {
+			sendError(w, http.StatusForbidden, "You don't have permission to view this order")
+			return
+		}
+	}
+
+	// Get driver-specific order information
+	orderInfo, err := h.App.Deps.Orders.GetDriverOrderInfo(orderID)
+	if err != nil {
+		sendErrorWithContext(w, r, http.StatusInternalServerError, "Failed to retrieve order information", err)
+		return
+	}
+
+	sendSuccessWithDebug(w, r, http.StatusOK, "Order information retrieved successfully", orderInfo)
+}

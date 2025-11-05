@@ -4,12 +4,18 @@
       summary: Create order
       description: |
         Create a new order for the authenticated customer.
+
+        **Note**: The `restaurant_name` is automatically fetched from the restaurants table
+        and stored in the order for historical accuracy. Clients should NOT provide
+        restaurant_name in the request - it is fetched server-side for security.
+
         The system will:
-        1. Validate restaurant is active and approved
-        2. Validate delivery address belongs to customer
-        3. Calculate totals (subtotal, tax, delivery fee)
-        4. Check minimum order amount
-        5. Create order and items in a transaction
+        1. Fetch restaurant name from database (based on restaurant_id)
+        2. Validate restaurant is active and approved
+        3. Validate delivery address belongs to customer
+        4. Calculate totals (subtotal, tax, delivery fee)
+        5. Check minimum order amount
+        6. Create order and items in a transaction
       tags:
         - Customer Orders
       security:
@@ -35,18 +41,22 @@
                     type: string
                     example: Order placed successfully
                   data:
-                    type: object
-                    properties:
-                      order_id:
-                        type: integer
-                        example: 42
-                      total_amount:
-                        type: number
-                        format: double
-                        example: 45.67
-                      status:
-                        type: string
-                        example: pending
+                    $ref: '../schemas/order.yaml#/Order'
+              example:
+                success: true
+                message: Order placed successfully
+                data:
+                  id: 42
+                  customer_id: 1
+                  restaurant_id: 1
+                  restaurant_name: Pizza Palace
+                  delivery_address_id: 1
+                  status: pending
+                  subtotal_amount: 35.97
+                  tax_amount: 3.06
+                  delivery_fee: 5.00
+                  total_amount: 44.03
+                  created_at: '2024-01-15T10:30:00Z'
         '400':
           description: Invalid request (restaurant inactive, minimum order not met, etc.)
           content:
@@ -535,11 +545,17 @@
       summary: Update order status
       description: |
         Update the status of an order (vendor action).
-        Valid transitions:
+
+        **Valid transitions**:
         - pending -> confirmed/cancelled
         - confirmed -> preparing/cancelled
         - preparing -> ready/cancelled
         - ready -> driver_assigned/cancelled
+
+        **Order Confirmation (pending -> confirmed)**:
+        When confirming an order, you can optionally provide `estimated_preparation_time` to override the restaurant's default average prep time.
+        If not provided, the system uses the restaurant's configured average_prep_time_minutes.
+        The estimated ready time will be calculated as: confirmed_at + prep_time_minutes
       tags:
         - Vendor Orders
       security:
@@ -823,6 +839,134 @@
                 $ref: '../schemas/common.yaml#/ErrorResponse'
         '500':
           description: Failed to retrieve order details
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+
+  /api/driver/orders/{id}/info:
+    get:
+      summary: Get driver-specific order information
+      description: |
+        Retrieve driver-focused order information including:
+        - Number of items in the order
+        - Estimated preparation time
+        - Estimated drive time (calculated from distance)
+        - Order status
+        - Restaurant and delivery addresses
+        Must be assigned to driver or available for assignment.
+      tags:
+        - Driver Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Order ID
+          required: true
+          schema:
+            type: integer
+            example: 42
+      responses:
+        '200':
+          description: Order information retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Order information retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      order_id:
+                        type: integer
+                        description: Order ID
+                        example: 42
+                      status:
+                        type: string
+                        description: Current order status
+                        enum: [pending, confirmed, preparing, ready, driver_assigned, picked_up, in_transit, delivered, cancelled, refunded]
+                        example: ready
+                      item_count:
+                        type: integer
+                        description: Total number of items in the order
+                        example: 3
+                      estimated_prep_time:
+                        type: integer
+                        nullable: true
+                        description: Estimated preparation time in minutes
+                        example: 15
+                      estimated_drive_time:
+                        type: integer
+                        nullable: true
+                        description: Estimated drive time in minutes (calculated from distance)
+                        example: 12
+                      total_amount:
+                        type: number
+                        format: float
+                        description: Total order amount
+                        example: 45.99
+                      restaurant_name:
+                        type: string
+                        description: Restaurant name
+                        example: Pizza Palace
+                      restaurant_address:
+                        type: string
+                        description: Full restaurant address
+                        example: 123 Main St, Springfield, IL 62701
+                      delivery_address:
+                        type: string
+                        description: Full delivery address
+                        example: 456 Oak Ave, Springfield, IL 62702
+                      special_instructions:
+                        type: string
+                        nullable: true
+                        description: Special delivery instructions from customer
+                        example: Ring doorbell twice
+                      placed_at:
+                        type: string
+                        format: date-time
+                        nullable: true
+                        description: When the order was placed
+                        example: 2025-10-29T14:30:00Z
+                      estimated_delivery_time:
+                        type: string
+                        format: date-time
+                        nullable: true
+                        description: Estimated delivery time
+                        example: 2025-10-29T15:15:00Z
+        '400':
+          description: Invalid order ID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '403':
+          description: Not authorized to view this order
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/ErrorResponse'
+        '500':
+          description: Failed to retrieve order information
           content:
             application/json:
               schema:

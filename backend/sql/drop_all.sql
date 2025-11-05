@@ -14,6 +14,12 @@ DROP TABLE IF EXISTS dashboard_widgets CASCADE;
 -- Drop system configuration
 DROP TABLE IF EXISTS system_settings CASCADE;
 
+-- Drop messaging system
+DROP TABLE IF EXISTS messages CASCADE;
+
+-- Drop distance API logging
+DROP TABLE IF EXISTS distance_requests CASCADE;
+
 -- Drop orders system (migration 002)
 DROP TABLE IF EXISTS order_status_history CASCADE;
 DROP TABLE IF EXISTS order_items CASCADE;
@@ -25,6 +31,7 @@ DROP TABLE IF EXISTS approval_history CASCADE;
 -- Drop restaurant and menu tables
 DROP TABLE IF EXISTS restaurant_menus CASCADE;
 DROP TABLE IF EXISTS vendor_restaurants CASCADE;
+DROP TABLE IF EXISTS menu_customization_templates CASCADE;
 DROP TABLE IF EXISTS menus CASCADE;
 DROP TABLE IF EXISTS restaurants CASCADE;
 
@@ -46,6 +53,7 @@ DROP TABLE IF EXISTS users CASCADE;
 -- ============================================================================
 
 -- Drop enums from migrations
+DROP TYPE IF EXISTS distance_request_status CASCADE;  -- Distance API
 DROP TYPE IF EXISTS setting_data_type CASCADE;  -- Migration 003_system_settings
 DROP TYPE IF EXISTS approval_status CASCADE;    -- Migration 001
 DROP TYPE IF EXISTS order_status CASCADE;       -- Migration 002 (extended enum)
@@ -76,8 +84,8 @@ BEGIN
     RAISE NOTICE 'All database objects have been dropped!';
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Dropped objects:';
-    RAISE NOTICE '  - 21 tables (including orders, approval_history, system_settings)';
-    RAISE NOTICE '  - 5 custom enum types';
+    RAISE NOTICE '  - 24 tables (including orders, approval_history, system_settings, messages, distance_requests, menu_customization_templates)';
+    RAISE NOTICE '  - 6 custom enum types';
     RAISE NOTICE '  - 3 functions';
     RAISE NOTICE '  - All associated triggers, indexes, and constraints';
     RAISE NOTICE '========================================';

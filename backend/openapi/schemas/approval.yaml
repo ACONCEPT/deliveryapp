@@ -4,7 +4,7 @@ ApprovalStatus:
     - pending
     - approved
     - rejected
-  description: Approval status of an entity (vendor or restaurant)
+  description: Approval status of an entity (vendor, restaurant, or driver)
   example: pending
 
 ApprovalHistory:
@@ -19,11 +19,12 @@ ApprovalHistory:
       enum:
         - vendor
         - restaurant
+        - driver
       description: Type of entity being approved/rejected
       example: vendor
     entity_id:
       type: integer
-      description: ID of the entity (vendor_id or restaurant_id)
+      description: ID of the entity (vendor_id, restaurant_id, or driver_id)
       example: 5
     admin_id:
       type: integer
@@ -100,6 +101,35 @@ RestaurantWithApproval:
           description: Name of admin who approved the restaurant
           example: Admin User
 
+DriverWithApproval:
+  allOf:
+    - $ref: './user.yaml#/Driver'
+    - type: object
+      properties:
+        approval_status:
+          $ref: '#/ApprovalStatus'
+        approved_by_admin_id:
+          type: integer
+          nullable: true
+          description: ID of admin who approved the driver
+          example: 1
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when driver was approved
+          example: "2024-01-15T10:30:00Z"
+        rejection_reason:
+          type: string
+          nullable: true
+          description: Reason for rejection if driver was rejected
+          example: Invalid driver license
+        approved_by_admin_name:
+          type: string
+          nullable: true
+          description: Name of admin who approved the driver
+          example: Admin User
+
 ApprovalActionRequest:
   type: object
   properties:
@@ -122,6 +152,10 @@ ApprovalDashboardResponse:
       type: integer
       description: Number of restaurants awaiting approval
       example: 8
+    pending_drivers:
+      type: integer
+      description: Number of drivers awaiting approval
+      example: 3
     approved_vendors:
       type: integer
       description: Total number of approved vendors
@@ -130,6 +164,10 @@ ApprovalDashboardResponse:
       type: integer
       description: Total number of approved restaurants
       example: 67
+    approved_drivers:
+      type: integer
+      description: Total number of approved drivers
+      example: 25
     rejected_vendors:
       type: integer
       description: Total number of rejected vendors
@@ -138,6 +176,10 @@ ApprovalDashboardResponse:
       type: integer
       description: Total number of rejected restaurants
       example: 2
+    rejected_drivers:
+      type: integer
+      description: Total number of rejected drivers
+      example: 1
 
 VendorApprovalStatusResponse:
   type: object
@@ -162,4 +204,29 @@ VendorApprovalStatusResponse:
     can_create_restaurants:
       type: boolean
       description: Whether vendor is allowed to create restaurants (true if approved)
+      example: true
+
+DriverApprovalStatusResponse:
+  type: object
+  properties:
+    driver_id:
+      type: integer
+      description: Driver ID
+      example: 5
+    approval_status:
+      $ref: '#/ApprovalStatus'
+    rejection_reason:
+      type: string
+      nullable: true
+      description: Reason for rejection if applicable
+      example: Invalid driver license
+    approved_at:
+      type: string
+      format: date-time
+      nullable: true
+      description: Timestamp when approved
+      example: "2024-01-15T10:30:00Z"
+    can_accept_orders:
+      type: boolean
+      description: Whether driver can accept delivery orders (true if approved)
       example: true

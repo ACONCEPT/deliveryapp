@@ -284,17 +284,40 @@ class OrderService extends BaseService {
   /// Update vendor order status
   /// PUT /api/vendor/orders/{id}
   /// Valid transitions: pending -> confirmed/cancelled, confirmed -> preparing/cancelled, preparing -> ready/cancelled
+  ///
+  /// Optional [estimatedPrepTimeMinutes] can be provided when confirming an order (pending -> confirmed)
+  /// to specify the estimated preparation time in minutes. This helps set customer expectations.
   Future<void> updateVendorOrderStatus(
-      int orderId, OrderStatus newStatus) async {
+    int orderId,
+    OrderStatus newStatus, {
+    int? estimatedPrepTimeMinutes,
+    String? notes,
+  }) async {
     try {
       developer.log('🍽️ Updating vendor order $orderId status to $newStatus',
           name: serviceName);
 
       String statusString = _statusToString(newStatus);
 
+      // Build request body
+      final Map<String, dynamic> requestBody = {
+        'status': statusString,
+      };
+
+      // Add optional fields if provided
+      if (estimatedPrepTimeMinutes != null) {
+        requestBody['estimated_preparation_time'] = estimatedPrepTimeMinutes;
+        developer.log('📦 Including estimated prep time: $estimatedPrepTimeMinutes minutes',
+            name: serviceName);
+      }
+
+      if (notes != null && notes.isNotEmpty) {
+        requestBody['notes'] = notes;
+      }
+
       final response = await httpClient.put(
         '/api/vendor/orders/$orderId',
-        body: {'status': statusString},
+        body: requestBody,
       );
 
       developer.log('📡 Update status response: ${response.statusCode}',
@@ -378,7 +401,7 @@ class OrderService extends BaseService {
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body) as Map<String, dynamic>;
         developer.log('📦 Admin order response:', name: serviceName);
-        developer.log(JsonEncoder.withIndent('  ').convert(jsonResponse),
+        developer.log(const JsonEncoder.withIndent('  ').convert(jsonResponse),
             name: serviceName);
 
         return _parseOrderResponse(jsonResponse);
@@ -581,7 +604,7 @@ class OrderService extends BaseService {
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body) as Map<String, dynamic>;
         developer.log('📦 Driver order response:', name: serviceName);
-        developer.log(JsonEncoder.withIndent('  ').convert(jsonResponse),
+        developer.log(const JsonEncoder.withIndent('  ').convert(jsonResponse),
             name: serviceName);
 
         return _parseOrderResponse(jsonResponse);

@@ -29,8 +29,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) {
+      print('[LoginScreen] Form validation failed');
       return;
     }
+
+    print('[LoginScreen] Starting login for: ${_usernameController.text.trim()}');
 
     setState(() {
       _isLoading = true;
@@ -42,20 +45,36 @@ class _LoginScreenState extends State<LoginScreen> {
         _passwordController.text.trim(),
       );
 
-      if (!mounted) return;
+      print('[LoginScreen] Login response received:');
+      print('  success: ${response.success}');
+      print('  message: ${response.message}');
+      print('  user: ${response.user?.username}');
+      print('  token: ${response.token != null ? '${response.token!.substring(0, 20)}...' : 'null'}');
+
+      if (!mounted) {
+        print('[LoginScreen] Widget not mounted after response');
+        return;
+      }
 
       if (response.success && response.user != null && response.token != null) {
+        print('[LoginScreen] Login successful, setting auth...');
         // Use AuthProvider to store authentication
         final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        print('[LoginScreen] AuthProvider obtained, calling setAuth...');
+
         await authProvider.setAuth(
           token: response.token!,
           user: response.user!,
           profile: response.profile,
         );
 
+        print('[LoginScreen] Auth set successfully!');
+        print('[LoginScreen] Auth state - isAuthenticated: ${authProvider.isAuthenticated}');
+
         // Navigation handled automatically by Consumer in main.dart
         // No need to manually navigate
       } else {
+        print('[LoginScreen] Login failed: ${response.message}');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(response.message),
@@ -63,7 +82,9 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('[LoginScreen] Exception during login: $e');
+      print('[LoginScreen] Stack trace: $stackTrace');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -76,6 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() {
           _isLoading = false;
         });
+        print('[LoginScreen] Loading state set to false');
       }
     }
   }

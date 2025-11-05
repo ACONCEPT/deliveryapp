@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
-import 'dart:convert';
 import 'package:intl/intl.dart';
 import '../models/user.dart';
 import '../models/restaurant.dart';
@@ -23,12 +22,13 @@ import 'admin/approvals_dashboard_screen.dart';
 import 'admin/system_settings_screen.dart';
 import 'admin/admin_order_dashboard_screen.dart';
 import 'admin/admin_restaurant_dashboard_screen.dart';
+import 'admin/user_admin_list_screen.dart';
 import 'customer/restaurant_menu_screen.dart';
 import 'customer/customer_active_orders_screen.dart';
 import 'customer/customer_order_history_screen.dart';
 import 'driver/driver_available_orders_screen.dart';
 import 'driver/driver_orders_screen.dart';
-import 'login_screen.dart';
+import 'customization_template_list_screen.dart';
 
 class ConfirmationScreen extends StatefulWidget {
   final User user;
@@ -201,7 +201,10 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => VendorMenuListScreen(token: widget.token),
+              builder: (context) => VendorMenuListScreen(
+                token: widget.token,
+                userType: widget.user.userType,
+              ),
             ),
           );
           break;
@@ -209,15 +212,18 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => VendorRestaurantSelectorScreen(token: widget.token),
+              builder: (context) => VendorRestaurantSelectorScreen(
+                token: widget.token,
+                userType: widget.user.userType,
+              ),
             ),
           );
           break;
-        case '/admin/approvals':
+        case '/admin/users':
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => ApprovalsDashboardScreen(token: widget.token),
+              builder: (context) => UserAdminListScreen(token: widget.token),
             ),
           );
           break;
@@ -285,6 +291,28 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
             context,
             MaterialPageRoute(
               builder: (context) => DriverOrdersScreen(token: widget.token),
+            ),
+          );
+          break;
+        case '/admin/customization-templates':
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CustomizationTemplateListScreen(
+                token: widget.token,
+                userType: 'admin',
+              ),
+            ),
+          );
+          break;
+        case '/vendor/customization-templates':
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CustomizationTemplateListScreen(
+                token: widget.token,
+                userType: 'vendor',
+              ),
             ),
           );
           break;

@@ -82,18 +82,24 @@ class ApprovalHistory {
 class ApprovalDashboardStats {
   final int pendingVendors;
   final int pendingRestaurants;
+  final int pendingDrivers;
   final int approvedVendors;
   final int approvedRestaurants;
+  final int approvedDrivers;
   final int rejectedVendors;
   final int rejectedRestaurants;
+  final int rejectedDrivers;
 
   ApprovalDashboardStats({
     required this.pendingVendors,
     required this.pendingRestaurants,
+    required this.pendingDrivers,
     required this.approvedVendors,
     required this.approvedRestaurants,
+    required this.approvedDrivers,
     required this.rejectedVendors,
     required this.rejectedRestaurants,
+    required this.rejectedDrivers,
   });
 
   /// Creates ApprovalDashboardStats from JSON response
@@ -101,21 +107,24 @@ class ApprovalDashboardStats {
     return ApprovalDashboardStats(
       pendingVendors: (json['pending_vendors'] as int?) ?? 0,
       pendingRestaurants: (json['pending_restaurants'] as int?) ?? 0,
+      pendingDrivers: (json['pending_drivers'] as int?) ?? 0,
       approvedVendors: (json['approved_vendors'] as int?) ?? 0,
       approvedRestaurants: (json['approved_restaurants'] as int?) ?? 0,
+      approvedDrivers: (json['approved_drivers'] as int?) ?? 0,
       rejectedVendors: (json['rejected_vendors'] as int?) ?? 0,
       rejectedRestaurants: (json['rejected_restaurants'] as int?) ?? 0,
+      rejectedDrivers: (json['rejected_drivers'] as int?) ?? 0,
     );
   }
 
   /// Total pending items requiring admin action
-  int get totalPending => pendingVendors + pendingRestaurants;
+  int get totalPending => pendingVendors + pendingRestaurants + pendingDrivers;
 
   /// Total approved items
-  int get totalApproved => approvedVendors + approvedRestaurants;
+  int get totalApproved => approvedVendors + approvedRestaurants + approvedDrivers;
 
   /// Total rejected items
-  int get totalRejected => rejectedVendors + rejectedRestaurants;
+  int get totalRejected => rejectedVendors + rejectedRestaurants + rejectedDrivers;
 }
 
 /// Vendor with approval status information
@@ -180,6 +189,93 @@ class VendorWithApproval {
     if (state != null && state!.isNotEmpty) parts.add(state!);
     return parts.isEmpty ? 'Location not specified' : parts.join(', ');
   }
+}
+
+/// Driver with approval status information
+class DriverWithApproval {
+  final int id;
+  final int userId;
+  final String fullName;
+  final String? phone;
+  final String? vehicleType;
+  final String? vehiclePlate;
+  final String? licenseNumber;
+  final String? city;
+  final String? state;
+  final double rating;
+  final bool isAvailable;
+  final ApprovalStatus approvalStatus;
+  final int? approvedByAdminId;
+  final DateTime? approvedAt;
+  final String? rejectionReason;
+  final String? approvedByAdminName;
+  final DateTime createdAt;
+
+  DriverWithApproval({
+    required this.id,
+    required this.userId,
+    required this.fullName,
+    this.phone,
+    this.vehicleType,
+    this.vehiclePlate,
+    this.licenseNumber,
+    this.city,
+    this.state,
+    required this.rating,
+    required this.isAvailable,
+    required this.approvalStatus,
+    this.approvedByAdminId,
+    this.approvedAt,
+    this.rejectionReason,
+    this.approvedByAdminName,
+    required this.createdAt,
+  });
+
+  /// Creates DriverWithApproval from JSON response
+  factory DriverWithApproval.fromJson(Map<String, dynamic> json) {
+    return DriverWithApproval(
+      id: (json['id'] as int?) ?? 0,
+      userId: (json['user_id'] as int?) ?? 0,
+      fullName: json['full_name'] as String? ?? '',
+      phone: json['phone'] as String?,
+      vehicleType: json['vehicle_type'] as String?,
+      vehiclePlate: json['vehicle_plate'] as String?,
+      licenseNumber: json['license_number'] as String?,
+      city: json['city'] as String?,
+      state: json['state'] as String?,
+      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
+      isAvailable: json['is_available'] as bool? ?? false,
+      approvalStatus: ApprovalStatus.fromString(json['approval_status'] as String? ?? 'pending'),
+      approvedByAdminId: json['approved_by_admin_id'] as int?,
+      approvedAt: json['approved_at'] != null
+          ? DateTime.parse(json['approved_at'] as String)
+          : null,
+      rejectionReason: json['rejection_reason'] as String?,
+      approvedByAdminName: json['approved_by_admin_name'] as String?,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'] as String)
+          : DateTime.now(),
+    );
+  }
+
+  /// Location display string
+  String get location {
+    final parts = <String>[];
+    if (city != null && city!.isNotEmpty) parts.add(city!);
+    if (state != null && state!.isNotEmpty) parts.add(state!);
+    return parts.isEmpty ? 'Location not specified' : parts.join(', ');
+  }
+
+  /// Vehicle display string
+  String get vehicleInfo {
+    final parts = <String>[];
+    if (vehicleType != null && vehicleType!.isNotEmpty) parts.add(vehicleType!);
+    if (vehiclePlate != null && vehiclePlate!.isNotEmpty) parts.add(vehiclePlate!);
+    return parts.isEmpty ? 'Vehicle info not specified' : parts.join(' - ');
+  }
+
+  /// Availability display string
+  String get availabilityStatus => isAvailable ? 'Available' : 'Unavailable';
 }
 
 /// Restaurant with approval status information

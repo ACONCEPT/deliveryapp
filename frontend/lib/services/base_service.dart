@@ -113,7 +113,7 @@ abstract class BaseService {
     try {
       final response = await operation();
 
-      if (response.statusCode != 200) {
+      if (response.statusCode != 200 && response.statusCode != 201) {
         final data = jsonDecode(response.body);
         throw Exception(data['message'] ?? 'Failed to $operationName');
       }

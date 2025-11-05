@@ -1,0 +1,266 @@
+/api/distance/estimate:
+  post:
+    summary: Calculate distance and duration
+    description: |
+      Calculate driving distance and estimated duration between a customer address and a restaurant.
+      Uses Mapbox Directions API for accurate routing data.
+
+      **Important Notes:**
+      - Both locations must have valid latitude/longitude coordinates
+      - Customers can only calculate distance for their own addresses
+      - Admins, vendors, and drivers can calculate distance for any address
+      - API usage is logged for monitoring free tier limits
+      - Mapbox free tier allows 100,000 requests per month
+
+      **Distance Calculation:**
+      - Uses driving profile (car navigation)
+      - Returns distance in meters, miles, and kilometers
+      - Returns duration in seconds, minutes, and formatted text
+
+      **Rate Limiting:**
+      - If Mapbox API rate limit is exceeded, returns 429 status
+      - System monitors monthly usage and warns when approaching 80% of limit
+    tags:
+      - Distance
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/distance.yaml#/DistanceEstimateRequest'
+          example:
+            address_id: 1
+            restaurant_id: 5
+    responses:
+      '200':
+        description: Distance calculated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Distance calculated successfully
+                data:
+                  $ref: '../schemas/distance.yaml#/DistanceEstimateResponse'
+      '400':
+        description: Invalid request (missing coordinates, invalid IDs, etc.)
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            examples:
+              invalidCoordinates:
+                summary: Address or restaurant missing coordinates
+                value:
+                  success: false
+                  message: Address does not have valid coordinates
+              invalidRoute:
+                summary: Cannot find route between locations
+                value:
+                  success: false
+                  message: "Invalid coordinates: Unable to find route between locations"
+              invalidId:
+                summary: Invalid address or restaurant ID
+                value:
+                  success: false
+                  message: "Invalid address_id: must be greater than 0"
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '403':
+        description: Forbidden - address does not belong to customer
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            example:
+              success: false
+              message: You don't have permission to access this address
+      '404':
+        description: Address or restaurant not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            examples:
+              addressNotFound:
+                summary: Address not found
+                value:
+                  success: false
+                  message: Address not found
+              restaurantNotFound:
+                summary: Restaurant not found
+                value:
+                  success: false
+                  message: Restaurant not found
+      '429':
+        description: Rate limit exceeded (Mapbox API free tier limit reached)
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            example:
+              success: false
+              message: "Rate limit exceeded: Mapbox API free tier limit reached. Please try again later."
+      '500':
+        description: Internal server error or Mapbox API error
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            example:
+              success: false
+              message: Failed to calculate distance
+
+/api/distance/history:
+  get:
+    summary: Get user distance history
+    description: |
+      Retrieve the authenticated user's recent distance calculation requests.
+      Includes successful calculations, errors, and rate-limited requests.
+
+      **Response includes:**
+      - Request timestamp
+      - Origin address ID and coordinates
+      - Destination restaurant ID and coordinates
+      - Request status (success, error, rate_limited, invalid_coordinates)
+      - Distance and duration (if successful)
+      - API response time in milliseconds
+      - Error message (if failed)
+      - Mapbox request ID for debugging
+
+      **Pagination:**
+      - Default: 50 most recent requests
+      - Maximum: 100 requests per page
+      - Sorted by created_at descending (newest first)
+    tags:
+      - Distance
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: page
+        in: query
+        description: Page number (1-indexed)
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          example: 1
+      - name: per_page
+        in: query
+        description: Number of requests per page (max 100)
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+          example: 50
+    responses:
+      '200':
+        description: Distance history retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Distance history retrieved successfully
+                data:
+                  type: array
+                  items:
+                    $ref: '../schemas/distance.yaml#/DistanceRequest'
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '500':
+        description: Failed to retrieve distance history
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+
+/api/admin/distance/usage:
+  get:
+    summary: Get Mapbox API usage statistics (Admin only)
+    description: |
+      Retrieve detailed API usage statistics for monitoring Mapbox free tier consumption.
+      Helps administrators track daily and monthly usage to avoid exceeding limits.
+
+      **Statistics included:**
+      - **Daily usage**: Total requests today
+      - **Monthly usage**: Total requests this month
+      - **Limit information**: Free tier limit (100,000/month), remaining requests, usage percentage
+      - **30-day breakdown**: Daily statistics for the last 30 days
+
+      **Daily breakdown includes:**
+      - Date
+      - Total requests
+      - Successful requests
+      - Error count
+      - Rate-limited requests
+      - Average API response time (milliseconds)
+
+      **Warning threshold:**
+      - System logs warning when monthly usage exceeds 80% of free tier limit
+      - Frontend should display warning when `approaching_limit: true`
+    tags:
+      - Distance
+      - Admin
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: API usage statistics retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: API usage retrieved successfully
+                data:
+                  $ref: '../schemas/distance.yaml#/DistanceAPIUsageResponse'
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '403':
+        description: Admin access required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            example:
+              success: false
+              message: Only admins can access API usage statistics
+      '500':
+        description: Failed to retrieve usage statistics
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'

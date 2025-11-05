@@ -1,0 +1,130 @@
+MenuCustomizationTemplate:
+  type: object
+  properties:
+    id:
+      type: integer
+      example: 1
+    name:
+      type: string
+      example: "Spice Level"
+      description: Unique name for the customization template
+    description:
+      type: string
+      nullable: true
+      example: "Choose your preferred spice level"
+      description: Optional description for the template
+    customization_config:
+      type: object
+      description: Flexible JSON structure for customization data (frontend-defined format)
+      example:
+        type: "select"
+        options:
+          - label: "Mild"
+            value: "mild"
+            price: 0
+          - label: "Medium"
+            value: "medium"
+            price: 0
+          - label: "Hot"
+            value: "hot"
+            price: 0
+          - label: "Extra Hot"
+            value: "extra_hot"
+            price: 1.00
+    vendor_id:
+      type: integer
+      nullable: true
+      example: 1
+      description: Owner of the template. NULL for system-wide templates (admin-created)
+    is_active:
+      type: boolean
+      example: true
+      description: Whether the template is currently active
+    created_at:
+      type: string
+      format: date-time
+      example: "2025-01-15T10:30:00Z"
+    updated_at:
+      type: string
+      format: date-time
+      example: "2025-01-15T10:30:00Z"
+  required:
+    - id
+    - name
+    - customization_config
+    - is_active
+    - created_at
+    - updated_at
+
+CreateCustomizationTemplateRequest:
+  type: object
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 255
+      example: "Toppings"
+      description: Name for the customization template
+    description:
+      type: string
+      example: "Add your favorite toppings"
+      description: Optional description
+    customization_config:
+      type: object
+      description: Flexible JSON structure for customization data (max 100KB)
+      example:
+        type: "multi-select"
+        max_selections: 5
+        options:
+          - label: "Pepperoni"
+            value: "pepperoni"
+            price: 2.00
+          - label: "Mushrooms"
+            value: "mushrooms"
+            price: 1.50
+          - label: "Extra Cheese"
+            value: "extra_cheese"
+            price: 1.00
+    is_active:
+      type: boolean
+      example: true
+      default: true
+      description: Whether the template is active
+  required:
+    - name
+    - customization_config
+
+UpdateCustomizationTemplateRequest:
+  type: object
+  description: All fields are optional for partial updates
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 255
+      example: "Updated Spice Level"
+    description:
+      type: string
+      nullable: true
+      example: "Updated description"
+    customization_config:
+      type: object
+      description: Updated JSON configuration (max 100KB)
+      example:
+        type: "select"
+        options:
+          - label: "No Spice"
+            value: "none"
+            price: 0
+          - label: "Mild"
+            value: "mild"
+            price: 0
+          - label: "Medium"
+            value: "medium"
+            price: 0.50
+          - label: "Hot"
+            value: "hot"
+            price: 1.00
+    is_active:
+      type: boolean
+      example: false

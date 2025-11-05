@@ -55,6 +55,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	// Decode request body
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[AUTH] ❌ Login failed - Invalid request body from %s", r.RemoteAddr)
 		sendError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
@@ -62,6 +63,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// Validate credentials
 	user, err := h.App.Deps.Users.ValidateCredentials(req.Username, req.Password)
 	if err != nil {
+		log.Printf("[AUTH] ❌ Login failed for username '%s' from %s - %v", req.Username, r.RemoteAddr, err)
 		sendError(w, http.StatusUnauthorized, "Invalid username or password")
 		return
 	}

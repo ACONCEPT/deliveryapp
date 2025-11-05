@@ -14,10 +14,12 @@ import '../vendor_restaurant_management_screen.dart';
 /// This provides a restaurant-first approach to menu management.
 class VendorRestaurantSelectorScreen extends StatefulWidget {
   final String token;
+  final String? userType; // User type for template import (typically 'vendor')
 
   const VendorRestaurantSelectorScreen({
     super.key,
     required this.token,
+    this.userType,
   });
 
   @override
@@ -94,6 +96,7 @@ class _VendorRestaurantSelectorScreenState
         builder: (context) => VendorMenuListScreen(
           token: widget.token,
           restaurant: restaurant,
+          userType: widget.userType,
         ),
       ),
     ).then((_) {

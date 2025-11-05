@@ -451,10 +451,215 @@
             schema:
               $ref: '../schemas/common.yaml#/ErrorResponse'
 
+/api/admin/approvals/drivers:
+  get:
+    summary: Get pending drivers
+    description: Retrieve all drivers awaiting approval (admin only)
+    tags:
+      - Approval Management
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Pending drivers retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Pending drivers retrieved successfully
+                data:
+                  type: array
+                  items:
+                    $ref: '../schemas/approval.yaml#/DriverWithApproval'
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '403':
+        description: Admin access required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '500':
+        description: Failed to retrieve pending drivers
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+
+/api/admin/drivers/{id}/approve:
+  put:
+    summary: Approve driver
+    description: Approve a driver account, allowing them to accept orders (admin only)
+    tags:
+      - Approval Management
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        description: Driver ID
+        required: true
+        schema:
+          type: integer
+          example: 5
+    responses:
+      '200':
+        description: Driver approved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Driver approved successfully
+                data:
+                  type: object
+                  nullable: true
+                  example: null
+      '400':
+        description: Invalid driver ID or driver already approved
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            examples:
+              invalid_id:
+                value:
+                  success: false
+                  message: Invalid driver ID
+              already_approved:
+                value:
+                  success: false
+                  message: Driver is already approved
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '403':
+        description: Admin access required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '404':
+        description: Driver not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '500':
+        description: Failed to approve driver
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+
+/api/admin/drivers/{id}/reject:
+  put:
+    summary: Reject driver
+    description: Reject a driver account with a reason (admin only)
+    tags:
+      - Approval Management
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        description: Driver ID
+        required: true
+        schema:
+          type: integer
+          example: 5
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/approval.yaml#/ApprovalActionRequest'
+          example:
+            reason: Driver license verification failed
+    responses:
+      '200':
+        description: Driver rejected successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Driver rejected successfully
+                data:
+                  type: object
+                  nullable: true
+                  example: null
+      '400':
+        description: Invalid request or driver already rejected
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            examples:
+              invalid_id:
+                value:
+                  success: false
+                  message: Invalid driver ID
+              missing_reason:
+                value:
+                  success: false
+                  message: Rejection reason is required
+              already_rejected:
+                value:
+                  success: false
+                  message: Driver is already rejected
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '403':
+        description: Admin access required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '404':
+        description: Driver not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '500':
+        description: Failed to reject driver
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+
 /api/admin/approvals/history:
   get:
     summary: Get approval history
-    description: Retrieve approval/rejection history for a specific entity (admin only)
+    description: Retrieve approval/rejection history for a specific entity (vendor, restaurant, or driver) (admin only)
     tags:
       - Approval Management
     security:
@@ -462,13 +667,14 @@
     parameters:
       - name: entity_type
         in: query
-        description: Type of entity (vendor or restaurant)
+        description: Type of entity (vendor, restaurant, or driver)
         required: true
         schema:
           type: string
           enum:
             - vendor
             - restaurant
+            - driver
           example: vendor
       - name: entity_id
         in: query
@@ -509,7 +715,7 @@
               invalid_entity_type:
                 value:
                   success: false
-                  message: entity_type must be 'vendor' or 'restaurant'
+                  message: entity_type must be 'vendor', 'restaurant', or 'driver'
               invalid_id:
                 value:
                   success: false
@@ -571,6 +777,49 @@
               $ref: '../schemas/common.yaml#/ErrorResponse'
       '404':
         description: Vendor profile not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+
+/api/driver/approval-status:
+  get:
+    summary: Get driver approval status
+    description: Retrieve approval status for the authenticated driver
+    tags:
+      - Approval Management
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Driver approval status retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Driver approval status retrieved successfully
+                data:
+                  $ref: '../schemas/approval.yaml#/DriverApprovalStatusResponse'
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '403':
+        description: Driver access required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '404':
+        description: Driver profile not found
         content:
           application/json:
             schema:

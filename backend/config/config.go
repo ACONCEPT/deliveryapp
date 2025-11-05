@@ -9,21 +9,23 @@ import (
 
 // Config holds all application configuration
 type Config struct {
-	DatabaseURL     string
-	ServerPort      string
-	JWTSecret       string
-	TokenDuration   int // in hours
-	Environment     string
+	DatabaseURL       string
+	ServerPort        string
+	JWTSecret         string
+	TokenDuration     int // in hours
+	Environment       string
+	MapboxAccessToken string
 }
 
 // Load reads configuration from environment variables
 func Load() (*Config, error) {
 	config := &Config{
-		DatabaseURL:   getEnv("DATABASE_URL", ""),
-		ServerPort:    getEnv("SERVER_PORT", "8080"),
-		JWTSecret:     getEnv("JWT_SECRET", ""),
-		TokenDuration: getEnvAsInt("TOKEN_DURATION", 72), // 3 days default
-		Environment:   getEnv("ENVIRONMENT", "development"),
+		DatabaseURL:       getEnv("DATABASE_URL", ""),
+		ServerPort:        getEnv("SERVER_PORT", "8080"),
+		JWTSecret:         getEnv("JWT_SECRET", ""),
+		TokenDuration:     getEnvAsInt("TOKEN_DURATION", 72), // 3 days default
+		Environment:       getEnv("ENVIRONMENT", "development"),
+		MapboxAccessToken: getEnv("MAPBOX_ACCESS_TOKEN", ""),
 	}
 
 	// Validate required fields
@@ -33,6 +35,11 @@ func Load() (*Config, error) {
 
 	if config.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET is required")
+	}
+
+	// Mapbox token is optional but warn if missing
+	if config.MapboxAccessToken == "" {
+		log.Printf("[WARNING] MAPBOX_ACCESS_TOKEN is not set - distance API will not work")
 	}
 
 	// Log JWT secret info for debugging (DO NOT log actual secret in production)

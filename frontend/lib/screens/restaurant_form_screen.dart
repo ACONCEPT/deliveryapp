@@ -387,56 +387,10 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            // Coordinates Section Header
-            Row(
-              children: [
-                Icon(Icons.my_location, color: Colors.blue[700]),
-                const SizedBox(width: 8),
-                Text(
-                  'Coordinates (Auto-filled)',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue[700],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Latitude and longitude are automatically filled from address search',
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _latitudeController,
-              readOnly: true,
-              decoration: InputDecoration(
-                labelText: 'Latitude (Auto-filled)',
-                hintText: 'Will be filled from address search',
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.my_location),
-                filled: true,
-                fillColor: Colors.blue[50],
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _longitudeController,
-              readOnly: true,
-              decoration: InputDecoration(
-                labelText: 'Longitude (Auto-filled)',
-                hintText: 'Will be filled from address search',
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.place),
-                filled: true,
-                fillColor: Colors.blue[50],
-              ),
-            ),
-            const SizedBox(height: 24),
+            // Note: Latitude and longitude are still tracked internally from address search
+            // but hidden from the UI. The coordinates are auto-populated by the
+            // AddressAutocompleteField's onAddressSelected callback (lines 97-118)
+            // and sent to the API during save (lines 120-239).
             ElevatedButton(
               onPressed: _isLoading ? null : _saveRestaurant,
               style: ElevatedButton.styleFrom(

@@ -319,8 +319,8 @@ func (h *Handler) GetApprovalHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate entity type
-	if entityType != "vendor" && entityType != "restaurant" {
-		sendError(w, http.StatusBadRequest, "entity_type must be 'vendor' or 'restaurant'")
+	if entityType != "vendor" && entityType != "restaurant" && entityType != "driver" {
+		sendError(w, http.StatusBadRequest, "entity_type must be 'vendor', 'restaurant', or 'driver'")
 		return
 	}
 
@@ -356,4 +356,168 @@ func (h *Handler) GetVendorApprovalStatus(w http.ResponseWriter, r *http.Request
 	}
 
 	sendSuccess(w, http.StatusOK, "Vendor approval status retrieved successfully", response)
+}
+
+// GetPendingDrivers returns all drivers awaiting approval (admin only)
+func (h *Handler) GetPendingDrivers(w http.ResponseWriter, r *http.Request) {
+	drivers, err := h.App.Deps.Users.GetPendingDrivers()
+	if err != nil {
+		sendErrorWithContext(w, r, http.StatusInternalServerError, "Failed to retrieve pending drivers", err)
+		return
+	}
+
+	sendSuccess(w, http.StatusOK, "Pending drivers retrieved successfully", drivers)
+}
+
+// ApproveDriver approves a driver (admin only)
+func (h *Handler) ApproveDriver(w http.ResponseWriter, r *http.Request) {
+	// Get admin from context
+	admin := middleware.MustGetUserFromContext(r.Context())
+
+	// Get driver ID from URL
+	vars := mux.Vars(r)
+	driverIDStr := vars["id"]
+	driverID, err := strconv.Atoi(driverIDStr)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid driver ID")
+		return
+	}
+
+	// Get admin profile to get admin ID
+	adminProfile, err := h.App.Deps.Users.GetAdminByUserID(admin.UserID)
+	if err != nil {
+		sendErrorWithContext(w, r, http.StatusInternalServerError, "Failed to retrieve admin profile", err)
+		return
+	}
+
+	// Verify driver exists
+	driver, err := h.App.Deps.Users.GetDriverByID(driverID)
+	if err != nil {
+		sendError(w, http.StatusNotFound, "Driver not found")
+		return
+	}
+
+	// Check if already approved
+	if driver.ApprovalStatus == string(models.ApprovalStatusApproved) {
+		sendError(w, http.StatusBadRequest, "Driver is already approved")
+		return
+	}
+
+	// Approve driver
+	err = h.App.Deps.Users.ApproveDriver(driverID, adminProfile.ID)
+	if err != nil {
+		sendErrorWithContext(w, r, http.StatusInternalServerError, "Failed to approve driver", err)
+		return
+	}
+
+	// Create approval history entry
+	history := &models.ApprovalHistory{
+		EntityType: "driver",
+		EntityID:   driverID,
+		AdminID:    adminProfile.ID,
+		Action:     models.ApprovalStatusApproved,
+		Reason:     nil,
+	}
+	err = h.App.Deps.Approvals.CreateApprovalHistory(history)
+	if err != nil {
+		// Log error but don't fail the request
+		// TODO: Add proper logging
+	}
+
+	sendSuccess(w, http.StatusOK, "Driver approved successfully", nil)
+}
+
+// RejectDriver rejects a driver with a reason (admin only)
+func (h *Handler) RejectDriver(w http.ResponseWriter, r *http.Request) {
+	// Get admin from context
+	admin := middleware.MustGetUserFromContext(r.Context())
+
+	// Get driver ID from URL
+	vars := mux.Vars(r)
+	driverIDStr := vars["id"]
+	driverID, err := strconv.Atoi(driverIDStr)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid driver ID")
+		return
+	}
+
+	// Decode request body
+	var req models.ApprovalActionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Validate rejection reason is provided
+	if req.Reason == nil || *req.Reason == "" {
+		sendError(w, http.StatusBadRequest, "Rejection reason is required")
+		return
+	}
+
+	// Get admin profile to get admin ID
+	adminProfile, err := h.App.Deps.Users.GetAdminByUserID(admin.UserID)
+	if err != nil {
+		sendErrorWithContext(w, r, http.StatusInternalServerError, "Failed to retrieve admin profile", err)
+		return
+	}
+
+	// Verify driver exists
+	driver, err := h.App.Deps.Users.GetDriverByID(driverID)
+	if err != nil {
+		sendError(w, http.StatusNotFound, "Driver not found")
+		return
+	}
+
+	// Check if already rejected
+	if driver.ApprovalStatus == string(models.ApprovalStatusRejected) {
+		sendError(w, http.StatusBadRequest, "Driver is already rejected")
+		return
+	}
+
+	// Reject driver
+	err = h.App.Deps.Users.RejectDriver(driverID, adminProfile.ID, *req.Reason)
+	if err != nil {
+		sendErrorWithContext(w, r, http.StatusInternalServerError, "Failed to reject driver", err)
+		return
+	}
+
+	// Create approval history entry
+	history := &models.ApprovalHistory{
+		EntityType: "driver",
+		EntityID:   driverID,
+		AdminID:    adminProfile.ID,
+		Action:     models.ApprovalStatusRejected,
+		Reason:     req.Reason,
+	}
+	err = h.App.Deps.Approvals.CreateApprovalHistory(history)
+	if err != nil {
+		// Log error but don't fail the request
+		// TODO: Add proper logging
+	}
+
+	sendSuccess(w, http.StatusOK, "Driver rejected successfully", nil)
+}
+
+// GetDriverApprovalStatus returns the approval status for the authenticated driver
+func (h *Handler) GetDriverApprovalStatus(w http.ResponseWriter, r *http.Request) {
+	// Get driver from context
+	user := middleware.MustGetUserFromContext(r.Context())
+
+	// Get driver profile
+	driver, err := h.App.Deps.Users.GetDriverByUserID(user.UserID)
+	if err != nil {
+		sendError(w, http.StatusNotFound, "Driver profile not found")
+		return
+	}
+
+	// Create response
+	response := models.DriverApprovalStatusResponse{
+		DriverID:        driver.ID,
+		ApprovalStatus:  models.ApprovalStatus(driver.ApprovalStatus),
+		RejectionReason: driver.RejectionReason,
+		ApprovedAt:      driver.ApprovedAt,
+		CanAcceptOrders: driver.ApprovalStatus == string(models.ApprovalStatusApproved),
+	}
+
+	sendSuccess(w, http.StatusOK, "Driver approval status retrieved successfully", response)
 }

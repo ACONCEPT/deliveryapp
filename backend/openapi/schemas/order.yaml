@@ -39,6 +39,10 @@
         restaurant_id:
           type: integer
           example: 1
+        restaurant_name:
+          type: string
+          description: Name of the restaurant at time of order (denormalized for performance and historical accuracy)
+          example: Pizza Palace
         delivery_address_id:
           type: integer
           nullable: true
@@ -207,9 +211,16 @@
         - restaurant_id
         - delivery_address_id
         - items
+      description: |
+        Request to create a new order.
+
+        **Important**: Do NOT include `restaurant_name` in this request. The restaurant name
+        is automatically fetched from the database based on `restaurant_id` for security
+        and data integrity. Any provided `restaurant_name` will be ignored.
       properties:
         restaurant_id:
           type: integer
+          description: ID of the restaurant (name will be fetched automatically)
           example: 1
         delivery_address_id:
           type: integer
@@ -266,7 +277,14 @@
         estimated_preparation_time:
           type: integer
           minimum: 1
-          description: Estimated preparation time in minutes (only when confirming order)
+          maximum: 300
+          nullable: true
+          description: |
+            **Optional**: Estimated preparation time in minutes.
+            - When confirming an order (status: 'confirmed'), this overrides the restaurant's default average prep time
+            - If not provided, the restaurant's default average_prep_time_minutes is used
+            - Must be between 1 and 300 minutes
+            - Used to calculate estimated_ready_time for the order
           example: 25
 
     CancelOrderRequest:

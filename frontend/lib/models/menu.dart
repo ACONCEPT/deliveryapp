@@ -112,7 +112,9 @@ class RestaurantMenuAssignment {
 
   factory RestaurantMenuAssignment.fromJson(Map<String, dynamic> json) {
     return RestaurantMenuAssignment(
-      restaurantId: json['restaurant_id'] as int,
+      restaurantId: (json['restaurant_id'] is int)
+          ? json['restaurant_id'] as int
+          : int.parse(json['restaurant_id'].toString()),
       restaurantName: json['restaurant_name'] as String,
       isActive: json['is_active'] as bool,
       displayOrder: json['display_order'] as int? ?? 0,
@@ -167,7 +169,7 @@ class MenuCategory {
 
   factory MenuCategory.fromJson(Map<String, dynamic> json) {
     return MenuCategory(
-      id: json['id'] as String,
+      id: json['id'].toString(),
       name: json['name'] as String,
       description: json['description'] as String?,
       displayOrder: json['display_order'] as int? ?? 0,
@@ -259,7 +261,7 @@ class MenuItem {
 
   factory MenuItem.fromJson(Map<String, dynamic> json) {
     return MenuItem(
-      id: json['id'] as String,
+      id: json['id'].toString(),
       name: json['name'] as String,
       description: json['description'] as String? ?? '',
       price: (json['price'] as num).toDouble(),
@@ -430,7 +432,7 @@ class ItemVariant {
 
   factory ItemVariant.fromJson(Map<String, dynamic> json) {
     return ItemVariant(
-      id: json['id'] as String,
+      id: json['id'].toString(),
       name: json['name'] as String,
       type: json['type'] as String? ?? 'single_choice',
       required: json['required'] as bool? ?? false,
@@ -487,7 +489,7 @@ class VariantOption {
 
   factory VariantOption.fromJson(Map<String, dynamic> json) {
     return VariantOption(
-      id: json['id'] as String,
+      id: json['id'].toString(),
       name: json['name'] as String,
       priceModifier: (json['price_modifier'] as num?)?.toDouble() ?? 0.0,
       description: json['description'] as String?,
@@ -545,7 +547,7 @@ class CustomizationOption {
 
   factory CustomizationOption.fromJson(Map<String, dynamic> json) {
     return CustomizationOption(
-      id: json['id'] as String,
+      id: json['id'].toString(),
       name: json['name'] as String,
       type: json['type'] as String,
       required: json['required'] as bool? ?? false,
@@ -610,7 +612,7 @@ class CustomizationChoice {
 
   factory CustomizationChoice.fromJson(Map<String, dynamic> json) {
     return CustomizationChoice(
-      id: json['id'] as String,
+      id: json['id'].toString(),
       name: json['name'] as String,
       priceModifier: (json['price_modifier'] as num?)?.toDouble() ?? 0.0,
     );

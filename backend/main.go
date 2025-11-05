@@ -46,6 +46,7 @@ func main() {
 
 	// Initialize handlers
 	h := handlers.NewHandler(app, conf.JWTSecret)
+	distanceHandler := handlers.NewDistanceHandler(h, conf.MapboxAccessToken)
 
 	// Setup router
 	router := mux.NewRouter()
@@ -76,6 +77,16 @@ func main() {
 	// User profile route (example)
 	protected.HandleFunc("/profile", h.GetProfile).Methods("GET", "OPTIONS")
 
+	// Distance calculation routes (accessible by all authenticated users)
+	protected.HandleFunc("/distance/estimate", distanceHandler.EstimateDistance).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/distance/history", distanceHandler.GetUserDistanceHistory).Methods("GET", "OPTIONS")
+
+	// Messaging routes (accessible by all authenticated users except drivers)
+	protected.HandleFunc("/messages", h.SendMessage).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/messages", h.GetMessages).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/messages/{id}", h.GetMessageByID).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/conversations", h.GetConversations).Methods("GET", "OPTIONS")
+
 	// Address GET routes (accessible by all authenticated users)
 	protected.HandleFunc("/addresses", h.GetAddresses).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/addresses/{id}", h.GetAddress).Methods("GET", "OPTIONS")
@@ -102,22 +113,32 @@ func main() {
 	// Admin menu management (view all menus in system)
 	adminRoutes.HandleFunc("/menus", h.GetAllMenus).Methods("GET", "OPTIONS")
 
+	// Admin customization template management (view/create/update/delete system-wide templates)
+	adminRoutes.HandleFunc("/customization-templates", h.GetAllCustomizationTemplates).Methods("GET", "OPTIONS")
+	adminRoutes.HandleFunc("/customization-templates", h.CreateSystemWideCustomizationTemplate).Methods("POST", "OPTIONS")
+	adminRoutes.HandleFunc("/customization-templates/{id}", h.UpdateSystemWideCustomizationTemplate).Methods("PUT", "OPTIONS")
+	adminRoutes.HandleFunc("/customization-templates/{id}", h.DeleteSystemWideCustomizationTemplate).Methods("DELETE", "OPTIONS")
+
 	// Admin approval routes
 	adminRoutes.HandleFunc("/approvals/vendors", h.GetPendingVendors).Methods("GET", "OPTIONS")
 	adminRoutes.HandleFunc("/approvals/restaurants", h.GetPendingRestaurants).Methods("GET", "OPTIONS")
+	adminRoutes.HandleFunc("/approvals/drivers", h.GetPendingDrivers).Methods("GET", "OPTIONS")
 	adminRoutes.HandleFunc("/approvals/dashboard", h.GetApprovalDashboard).Methods("GET", "OPTIONS")
 	adminRoutes.HandleFunc("/vendors/{id}/approve", h.ApproveVendor).Methods("PUT", "OPTIONS")
 	adminRoutes.HandleFunc("/vendors/{id}/reject", h.RejectVendor).Methods("PUT", "OPTIONS")
 	adminRoutes.HandleFunc("/restaurants/{id}/approve", h.ApproveRestaurant).Methods("PUT", "OPTIONS")
 	adminRoutes.HandleFunc("/restaurants/{id}/reject", h.RejectRestaurant).Methods("PUT", "OPTIONS")
+	adminRoutes.HandleFunc("/drivers/{id}/approve", h.ApproveDriver).Methods("PUT", "OPTIONS")
+	adminRoutes.HandleFunc("/drivers/{id}/reject", h.RejectDriver).Methods("PUT", "OPTIONS")
 	adminRoutes.HandleFunc("/approvals/history", h.GetApprovalHistory).Methods("GET", "OPTIONS")
 
 	// Admin order routes (Phase 1: Core Order System)
 	adminRoutes.HandleFunc("/orders", h.GetAllOrders).Methods("GET", "OPTIONS")
-	adminRoutes.HandleFunc("/orders/{id}", h.GetAdminOrderDetails).Methods("GET", "OPTIONS")
-	adminRoutes.HandleFunc("/orders/{id}", h.UpdateAdminOrder).Methods("PUT", "OPTIONS")
+	// IMPORTANT: Register specific routes BEFORE parameterized routes to avoid conflicts
 	adminRoutes.HandleFunc("/orders/stats", h.GetOrderStats).Methods("GET", "OPTIONS")
 	adminRoutes.HandleFunc("/orders/export", h.ExportOrders).Methods("GET", "OPTIONS")
+	adminRoutes.HandleFunc("/orders/{id}", h.GetAdminOrderDetails).Methods("GET", "OPTIONS")
+	adminRoutes.HandleFunc("/orders/{id}", h.UpdateAdminOrder).Methods("PUT", "OPTIONS")
 
 	// Admin system settings routes
 	adminRoutes.HandleFunc("/settings", h.GetSystemSettings).Methods("GET", "OPTIONS")
@@ -126,15 +147,32 @@ func main() {
 	adminRoutes.HandleFunc("/settings/{key}", h.UpdateSetting).Methods("PUT", "OPTIONS")
 	adminRoutes.HandleFunc("/settings", h.UpdateMultipleSettings).Methods("PUT", "OPTIONS")
 
-	// Vendor-only routes
+	// Admin distance API monitoring routes
+	adminRoutes.HandleFunc("/distance/usage", distanceHandler.GetAPIUsage).Methods("GET", "OPTIONS")
+
+	// Admin user management routes
+	adminRoutes.HandleFunc("/users", h.GetAllUsers).Methods("GET", "OPTIONS")
+	adminRoutes.HandleFunc("/users/{id}", h.DeleteUser).Methods("DELETE", "OPTIONS")
+
+	// Admin restaurant settings management (access any restaurant's settings)
+	adminRoutes.HandleFunc("/restaurant/{restaurantId}/settings", h.GetRestaurantSettings).Methods("GET", "OPTIONS")
+	adminRoutes.HandleFunc("/restaurant/{restaurantId}/settings", h.UpdateRestaurantSettings).Methods("PUT", "OPTIONS")
+	adminRoutes.HandleFunc("/restaurant/{restaurantId}/prep-time", h.UpdateRestaurantPrepTime).Methods("PATCH", "OPTIONS")
+
+	// Vendor routes (admins also have access for oversight)
 	vendorRoutes := api.PathPrefix("/vendor").Subrouter()
 	vendorRoutes.Use(middleware.AuthMiddleware(conf.JWTSecret))
-	vendorRoutes.Use(middleware.RequireUserType("vendor"))
+	vendorRoutes.Use(middleware.RequireUserType("vendor", "admin"))
 
 	// Restaurant management (vendors create, update, delete their own restaurants)
 	vendorRoutes.HandleFunc("/restaurants", h.CreateRestaurant).Methods("POST", "OPTIONS")
 	vendorRoutes.HandleFunc("/restaurants/{id}", h.UpdateRestaurant).Methods("PUT", "OPTIONS")
 	vendorRoutes.HandleFunc("/restaurants/{id}", h.DeleteRestaurant).Methods("DELETE", "OPTIONS")
+
+	// Restaurant settings (hours of operation, prep time)
+	vendorRoutes.HandleFunc("/restaurant/{restaurantId}/settings", h.GetRestaurantSettings).Methods("GET", "OPTIONS")
+	vendorRoutes.HandleFunc("/restaurant/{restaurantId}/settings", h.UpdateRestaurantSettings).Methods("PUT", "OPTIONS")
+	vendorRoutes.HandleFunc("/restaurant/{restaurantId}/prep-time", h.UpdateRestaurantPrepTime).Methods("PATCH", "OPTIONS")
 
 	// Menu management (vendors manage their menus)
 	vendorRoutes.HandleFunc("/menus", h.CreateMenu).Methods("POST", "OPTIONS")
@@ -147,6 +185,13 @@ func main() {
 	vendorRoutes.HandleFunc("/restaurants/{restaurant_id}/menus/{menu_id}", h.AssignMenuToRestaurant).Methods("POST", "OPTIONS")
 	vendorRoutes.HandleFunc("/restaurants/{restaurant_id}/menus/{menu_id}", h.UnassignMenuFromRestaurant).Methods("DELETE", "OPTIONS")
 	vendorRoutes.HandleFunc("/restaurants/{restaurant_id}/active-menu", h.SetActiveMenu).Methods("PUT", "OPTIONS")
+
+	// Customization template management (vendors manage their templates and view system-wide templates)
+	vendorRoutes.HandleFunc("/customization-templates", h.CreateCustomizationTemplate).Methods("POST", "OPTIONS")
+	vendorRoutes.HandleFunc("/customization-templates", h.GetCustomizationTemplates).Methods("GET", "OPTIONS")
+	vendorRoutes.HandleFunc("/customization-templates/{id}", h.GetCustomizationTemplate).Methods("GET", "OPTIONS")
+	vendorRoutes.HandleFunc("/customization-templates/{id}", h.UpdateCustomizationTemplate).Methods("PUT", "OPTIONS")
+	vendorRoutes.HandleFunc("/customization-templates/{id}", h.DeleteCustomizationTemplate).Methods("DELETE", "OPTIONS")
 
 	// Image upload (vendors upload menu item images)
 	vendorRoutes.HandleFunc("/upload-image", h.UploadImage).Methods("POST", "OPTIONS")
@@ -184,10 +229,14 @@ func main() {
 	driverRoutes.Use(middleware.AuthMiddleware(conf.JWTSecret))
 	driverRoutes.Use(middleware.RequireUserType("driver"))
 
+	// Driver approval status check
+	driverRoutes.HandleFunc("/approval-status", h.GetDriverApprovalStatus).Methods("GET", "OPTIONS")
+
 	// Driver order routes (Phase 1: Core Order System)
 	driverRoutes.HandleFunc("/orders/available", h.GetAvailableOrders).Methods("GET", "OPTIONS")
 	driverRoutes.HandleFunc("/orders", h.GetDriverOrders).Methods("GET", "OPTIONS")
 	driverRoutes.HandleFunc("/orders/{id}", h.GetDriverOrderDetails).Methods("GET", "OPTIONS")
+	driverRoutes.HandleFunc("/orders/{id}/info", h.GetDriverOrderInfo).Methods("GET", "OPTIONS")
 	driverRoutes.HandleFunc("/orders/{id}/assign", h.AssignOrderToDriver).Methods("POST", "OPTIONS")
 	driverRoutes.HandleFunc("/orders/{id}/status", h.UpdateDriverOrderStatus).Methods("PUT", "OPTIONS")
 

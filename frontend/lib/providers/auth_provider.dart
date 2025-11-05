@@ -62,37 +62,51 @@ class AuthProvider with ChangeNotifier {
 
   // Initialize auth state from storage
   Future<void> initialize() async {
+    developer.log('🔵 AuthProvider.initialize() called', name: 'AuthProvider');
     try {
+      developer.log('  Getting SharedPreferences instance...', name: 'AuthProvider');
       final prefs = await SharedPreferences.getInstance();
+      developer.log('  SharedPreferences obtained', name: 'AuthProvider');
+
       _token = prefs.getString(_tokenKey);
+      developer.log('  Token from storage: ${_token != null ? "EXISTS" : "NULL"}', name: 'AuthProvider');
 
       if (_token != null) {
+        developer.log('  Checking token expiration...', name: 'AuthProvider');
         // Check if token is expired
         if (isTokenExpired) {
-          developer.log('Stored token is expired, clearing auth',
+          developer.log('⚠️  Stored token is expired, clearing auth',
             name: 'AuthProvider');
           await clearAuth();
         } else {
+          developer.log('✅ Token is valid', name: 'AuthProvider');
           // Restore user info from preferences
           final userId = prefs.getInt(_userIdKey);
           final username = prefs.getString(_usernameKey);
           final userType = prefs.getString(_userTypeKey);
 
+          developer.log('  User info - userId: $userId, username: $username, userType: $userType',
+            name: 'AuthProvider');
+
           if (userId != null && username != null && userType != null) {
             // Reconstruct minimal user object
             // Note: Full user data should be fetched from /api/profile
-            developer.log('Auth restored from storage for user: $username',
+            developer.log('✅ Auth restored from storage for user: $username',
               name: 'AuthProvider');
           }
         }
+      } else {
+        developer.log('  No token in storage - user not logged in', name: 'AuthProvider');
       }
 
       _isInitialized = true;
+      developer.log('✅ AuthProvider initialized successfully', name: 'AuthProvider');
       notifyListeners();
-    } catch (e) {
-      developer.log('Error initializing auth: $e',
-        name: 'AuthProvider', error: e);
+    } catch (e, stackTrace) {
+      developer.log('❌ Error initializing auth: $e',
+        name: 'AuthProvider', error: e, stackTrace: stackTrace);
       _isInitialized = true;
+      developer.log('⚠️  Set isInitialized=true despite error', name: 'AuthProvider');
       notifyListeners();
     }
   }

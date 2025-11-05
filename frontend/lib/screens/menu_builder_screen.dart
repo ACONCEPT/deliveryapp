@@ -8,11 +8,13 @@ import 'menu_item_form_screen_enhanced.dart';
 class MenuBuilderScreen extends StatefulWidget {
   final String token;
   final Menu menu;
+  final String? userType; // User type for template import (admin/vendor)
 
   const MenuBuilderScreen({
     super.key,
     required this.token,
     required this.menu,
+    this.userType,
   });
 
   @override
@@ -178,7 +180,10 @@ class _MenuBuilderScreenState extends State<MenuBuilderScreen> {
     final result = await Navigator.push<MenuItem>(
       context,
       MaterialPageRoute(
-        builder: (context) => MenuItemFormScreenEnhanced(token: widget.token),
+        builder: (context) => MenuItemFormScreenEnhanced(
+          token: widget.token,
+          userType: widget.userType,
+        ),
       ),
     );
 
@@ -199,6 +204,7 @@ class _MenuBuilderScreenState extends State<MenuBuilderScreen> {
         builder: (context) => MenuItemFormScreenEnhanced(
           item: _categories[categoryIndex].items[itemIndex],
           token: widget.token,
+          userType: widget.userType,
         ),
       ),
     );

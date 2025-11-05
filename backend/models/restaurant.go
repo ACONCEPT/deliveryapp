@@ -14,10 +14,12 @@ type Restaurant struct {
 	State             *string    `json:"state,omitempty" db:"state"`
 	PostalCode        *string    `json:"postal_code,omitempty" db:"postal_code"`
 	Country           *string    `json:"country,omitempty" db:"country"`
-	Latitude          *float64   `json:"latitude,omitempty" db:"latitude"`
-	Longitude         *float64   `json:"longitude,omitempty" db:"longitude"`
-	HoursOfOperation  *string    `json:"hours_of_operation,omitempty" db:"hours_of_operation"`
-	IsActive          bool       `json:"is_active" db:"is_active"`
+	Latitude              *float64   `json:"latitude,omitempty" db:"latitude"`
+	Longitude             *float64   `json:"longitude,omitempty" db:"longitude"`
+	HoursOfOperation      *string    `json:"hours_of_operation,omitempty" db:"hours_of_operation"`
+	AveragePrepTimeMin    int        `json:"average_prep_time_minutes" db:"average_prep_time_minutes"`
+	Timezone              string     `json:"timezone" db:"timezone"`
+	IsActive              bool       `json:"is_active" db:"is_active"`
 	Rating            float64    `json:"rating" db:"rating"`
 	TotalOrders       int        `json:"total_orders" db:"total_orders"`
 	ApprovalStatus    string     `json:"approval_status" db:"approval_status"`
@@ -55,9 +57,11 @@ type CreateRestaurantRequest struct {
 	State            *string  `json:"state,omitempty"`
 	PostalCode       *string  `json:"postal_code,omitempty"`
 	Country          *string  `json:"country,omitempty"`
-	Latitude         *float64 `json:"latitude,omitempty"`
-	Longitude        *float64 `json:"longitude,omitempty"`
-	HoursOfOperation *string  `json:"hours_of_operation,omitempty"`
+	Latitude           *float64 `json:"latitude,omitempty"`
+	Longitude          *float64 `json:"longitude,omitempty"`
+	HoursOfOperation   *string  `json:"hours_of_operation,omitempty"`
+	AveragePrepTimeMin *int     `json:"average_prep_time_minutes,omitempty"`
+	Timezone           *string  `json:"timezone,omitempty"`
 }
 
 // UpdateRestaurantRequest represents the request to update a restaurant
@@ -71,8 +75,10 @@ type UpdateRestaurantRequest struct {
 	State            *string  `json:"state,omitempty"`
 	PostalCode       *string  `json:"postal_code,omitempty"`
 	Country          *string  `json:"country,omitempty"`
-	Latitude         *float64 `json:"latitude,omitempty"`
-	Longitude        *float64 `json:"longitude,omitempty"`
-	HoursOfOperation *string  `json:"hours_of_operation,omitempty"`
-	IsActive         *bool    `json:"is_active,omitempty"`
+	Latitude           *float64 `json:"latitude,omitempty"`
+	Longitude          *float64 `json:"longitude,omitempty"`
+	HoursOfOperation   *string  `json:"hours_of_operation,omitempty"`
+	AveragePrepTimeMin *int     `json:"average_prep_time_minutes,omitempty"`
+	Timezone           *string  `json:"timezone,omitempty"`
+	IsActive           *bool    `json:"is_active,omitempty"`
 }

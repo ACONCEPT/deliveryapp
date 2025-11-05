@@ -1,0 +1,343 @@
+/api/admin/users:
+  get:
+    summary: List all users with filtering and pagination
+    description: |
+      Retrieve a paginated list of all users in the system with optional filtering and searching (admin only).
+
+      **Filtering options:**
+      - `user_type`: Filter by user type (customer, vendor, driver, admin)
+      - `status`: Filter by user status (active, inactive, suspended) or approval status (pending, approved, rejected)
+      - `search`: Search across username, email, and profile names (case-insensitive)
+
+      **Pagination:**
+      - `page`: Page number (default: 1)
+      - `per_page`: Items per page (default: 20, max: 100)
+
+      **Response includes:**
+      - User account details (username, email, user_type, status)
+      - Type-specific profile data (Customer, Vendor, Driver, or Admin)
+      - Pagination metadata (total_count, total_pages)
+    tags:
+      - Admin User Management
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: user_type
+        in: query
+        required: false
+        description: Filter by user type
+        schema:
+          type: string
+          enum: [customer, vendor, driver, admin]
+          example: customer
+      - name: status
+        in: query
+        required: false
+        description: Filter by user status or approval status
+        schema:
+          type: string
+          enum: [active, inactive, suspended, pending, approved, rejected]
+          example: active
+      - name: search
+        in: query
+        required: false
+        description: Search in username, email, first_name, last_name, business_name
+        schema:
+          type: string
+          example: john
+      - name: page
+        in: query
+        required: false
+        description: Page number (starts at 1)
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          example: 1
+      - name: per_page
+        in: query
+        required: false
+        description: Number of items per page (max 100)
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+          example: 20
+    responses:
+      '200':
+        description: Users retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "Users retrieved successfully"
+                data:
+                  type: object
+                  properties:
+                    users:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id:
+                            type: integer
+                            example: 1
+                          username:
+                            type: string
+                            example: "customer1"
+                          email:
+                            type: string
+                            example: "customer1@example.com"
+                          user_type:
+                            type: string
+                            enum: [customer, vendor, driver, admin]
+                            example: "customer"
+                          status:
+                            type: string
+                            enum: [active, inactive, suspended]
+                            example: "active"
+                          created_at:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:30:00Z"
+                          updated_at:
+                            type: string
+                            format: date-time
+                            example: "2025-01-15T10:30:00Z"
+                          profile:
+                            type: object
+                            description: Type-specific profile data (Customer, Vendor, Driver, or Admin)
+                            oneOf:
+                              - $ref: '../schemas/user.yaml#/Customer'
+                              - $ref: '../schemas/user.yaml#/Vendor'
+                              - $ref: '../schemas/user.yaml#/Driver'
+                              - $ref: '../schemas/user.yaml#/Admin'
+                    total_count:
+                      type: integer
+                      example: 150
+                      description: Total number of matching users
+                    page:
+                      type: integer
+                      example: 1
+                      description: Current page number
+                    per_page:
+                      type: integer
+                      example: 20
+                      description: Number of items per page
+                    total_pages:
+                      type: integer
+                      example: 8
+                      description: Total number of pages
+            example:
+              success: true
+              message: "Users retrieved successfully"
+              data:
+                users:
+                  - id: 1
+                    username: "customer1"
+                    email: "customer1@example.com"
+                    user_type: "customer"
+                    status: "active"
+                    created_at: "2025-01-15T10:30:00Z"
+                    updated_at: "2025-01-15T10:30:00Z"
+                    profile:
+                      id: 1
+                      user_id: 1
+                      full_name: "John Doe"
+                      phone: "555-0100"
+                      default_address_id: null
+                      created_at: "2025-01-15T10:30:00Z"
+                      updated_at: "2025-01-15T10:30:00Z"
+                  - id: 2
+                    username: "vendor1"
+                    email: "vendor1@example.com"
+                    user_type: "vendor"
+                    status: "active"
+                    created_at: "2025-01-14T09:20:00Z"
+                    updated_at: "2025-01-14T09:20:00Z"
+                    profile:
+                      id: 1
+                      user_id: 2
+                      business_name: "Pizza Palace"
+                      description: "Best pizza in town"
+                      phone: "555-0200"
+                      is_active: true
+                      rating: 4.5
+                      total_orders: 127
+                      approval_status: "approved"
+                      created_at: "2025-01-14T09:20:00Z"
+                      updated_at: "2025-01-14T09:20:00Z"
+                total_count: 150
+                page: 1
+                per_page: 20
+                total_pages: 8
+      '400':
+        description: Bad request (invalid query parameters)
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            examples:
+              invalidUserType:
+                summary: Invalid user_type parameter
+                value:
+                  success: false
+                  message: "Invalid user_type. Must be one of: customer, vendor, driver, admin"
+              invalidStatus:
+                summary: Invalid status parameter
+                value:
+                  success: false
+                  message: "Invalid status"
+              invalidPage:
+                summary: Invalid page number
+                value:
+                  success: false
+                  message: "Invalid page number"
+              invalidPerPage:
+                summary: Invalid per_page value
+                value:
+                  success: false
+                  message: "Invalid per_page value (must be 1-100)"
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '403':
+        description: Admin access required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            example:
+              success: false
+              message: "Forbidden: admin access required"
+      '500':
+        description: Internal server error
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            example:
+              success: false
+              message: "Failed to retrieve users"
+
+/api/admin/users/{id}:
+  delete:
+    summary: Delete user by ID
+    description: |
+      Delete a user and all associated profile data (admin only).
+
+      **Safety checks:**
+      - Prevents admin from deleting themselves
+      - Prevents deletion of the last admin user
+      - Cascades delete to associated profile (customer, vendor, driver, or admin)
+
+      **What gets deleted:**
+      - User account (from users table)
+      - Associated profile (customers, vendors, drivers, or admins table - via CASCADE)
+      - All profile-related data (addresses, restaurants, etc. - via CASCADE)
+    tags:
+      - Admin User Management
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: User ID to delete
+        schema:
+          type: integer
+          example: 5
+    responses:
+      '200':
+        description: User deleted successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "User 'customer1' deleted successfully"
+                data:
+                  type: null
+                  example: null
+            example:
+              success: true
+              message: "User 'customer1' deleted successfully"
+              data: null
+      '400':
+        description: Bad request (cannot delete self or last admin)
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            examples:
+              selfDelete:
+                summary: Attempting to delete own account
+                value:
+                  success: false
+                  message: "Cannot delete your own account"
+              lastAdmin:
+                summary: Attempting to delete last admin
+                value:
+                  success: false
+                  message: "Cannot delete the last admin user"
+              invalidID:
+                summary: Invalid user ID format
+                value:
+                  success: false
+                  message: "Invalid user ID"
+      '401':
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+      '403':
+        description: Admin access required
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            example:
+              success: false
+              message: "Forbidden: admin access required"
+      '404':
+        description: User not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            example:
+              success: false
+              message: "User not found"
+      '500':
+        description: Internal server error
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/ErrorResponse'
+            examples:
+              deleteError:
+                summary: Failed to delete user
+                value:
+                  success: false
+                  message: "Failed to delete user"
+              countError:
+                summary: Failed to verify admin count
+                value:
+                  success: false
+                  message: "Failed to verify admin count"

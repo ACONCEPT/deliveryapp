@@ -28,6 +28,17 @@ class _VariantBuilderState extends State<VariantBuilder> {
     _variants = List<ItemVariant>.from(widget.variants);
   }
 
+  @override
+  void didUpdateWidget(VariantBuilder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update internal list when widget.variants changes
+    if (widget.variants != oldWidget.variants || widget.variants.length != oldWidget.variants.length) {
+      setState(() {
+        _variants = List<ItemVariant>.from(widget.variants);
+      });
+    }
+  }
+
   void _addVariant() async {
     final result = await showDialog<ItemVariant>(
       context: context,
@@ -567,6 +578,18 @@ class _CustomizationOptionsBuilderState
   void initState() {
     super.initState();
     _options = List<CustomizationOption>.from(widget.options);
+  }
+
+  @override
+  void didUpdateWidget(CustomizationOptionsBuilder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update internal list when widget.options changes (e.g., after import)
+    // Check both reference and length to catch all updates
+    if (widget.options != oldWidget.options || widget.options.length != oldWidget.options.length) {
+      setState(() {
+        _options = List<CustomizationOption>.from(widget.options);
+      });
+    }
   }
 
   void _addOption() async {
@@ -1203,6 +1226,21 @@ class _DietaryFlagsBuilderState extends State<DietaryFlagsBuilder> {
     }
   }
 
+  @override
+  void didUpdateWidget(DietaryFlagsBuilder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update internal map when widget.flags changes
+    if (widget.flags != oldWidget.flags) {
+      setState(() {
+        _flags = Map<String, bool>.from(widget.flags);
+        // Initialize any missing flags
+        for (final key in availableFlags.keys) {
+          _flags.putIfAbsent(key, () => false);
+        }
+      });
+    }
+  }
+
   void _toggleFlag(String key, bool value) {
     setState(() {
       _flags[key] = value;
@@ -1289,6 +1327,17 @@ class _AllergensBuilderState extends State<AllergensBuilder> {
   void initState() {
     super.initState();
     _allergens = Set<String>.from(widget.allergens);
+  }
+
+  @override
+  void didUpdateWidget(AllergensBuilder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update internal set when widget.allergens changes
+    if (widget.allergens != oldWidget.allergens || widget.allergens.length != oldWidget.allergens.length) {
+      setState(() {
+        _allergens = Set<String>.from(widget.allergens);
+      });
+    }
   }
 
   void _toggleAllergen(String allergen) {
@@ -1475,6 +1524,17 @@ class _TagsBuilderState extends State<TagsBuilder> {
   void initState() {
     super.initState();
     _tags = Set<String>.from(widget.tags);
+  }
+
+  @override
+  void didUpdateWidget(TagsBuilder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update internal set when widget.tags changes
+    if (widget.tags != oldWidget.tags || widget.tags.length != oldWidget.tags.length) {
+      setState(() {
+        _tags = Set<String>.from(widget.tags);
+      });
+    }
   }
 
   @override
@@ -1674,7 +1734,7 @@ class AdditionalInfoFields extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<int?>(
-              value: spiceLevel,
+              initialValue: spiceLevel,
               decoration: const InputDecoration(
                 labelText: 'Spice Level (Optional)',
                 prefixIcon: Icon(Icons.local_fire_department),

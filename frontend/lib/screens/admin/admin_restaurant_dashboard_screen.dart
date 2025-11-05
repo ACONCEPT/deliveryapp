@@ -6,6 +6,7 @@ import '../../services/restaurant_service.dart';
 import '../../config/dashboard_constants.dart';
 import 'admin_restaurant_menus_screen.dart';
 import '../restaurant_form_screen.dart';
+import '../vendor/restaurant_settings_screen.dart';
 
 /// Admin Restaurant Dashboard Screen
 ///
@@ -112,8 +113,17 @@ class _AdminRestaurantDashboardScreenState
   }
 
   Future<void> _toggleRestaurantStatus(Restaurant restaurant) async {
+    // If deactivating (currently active), show confirmation dialog
+    if (restaurant.isActive) {
+      final confirmed = await _showDeactivateConfirmation(restaurant);
+      if (confirmed != true) {
+        return; // User cancelled
+      }
+    }
+
     try {
       // Show loading indicator
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -162,6 +172,78 @@ class _AdminRestaurantDashboardScreenState
     }
   }
 
+  Future<bool?> _showDeactivateConfirmation(Restaurant restaurant) async {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Deactivate Restaurant'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Are you sure you want to deactivate this restaurant?',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            Text('Restaurant: ${restaurant.name}'),
+            if (restaurant.shortAddress.isNotEmpty)
+              Text('Location: ${restaurant.shortAddress}'),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange[200]!),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '⚠️ Deactivation Effects:',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    '• Restaurant will not be visible to customers\n'
+                    '• No new orders can be placed\n'
+                    '• Existing orders will not be affected\n'
+                    '• You can reactivate anytime',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Deactivate'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _navigateToRestaurantMenus(Restaurant restaurant) async {
     await Navigator.push(
       context,
@@ -191,6 +273,23 @@ class _AdminRestaurantDashboardScreenState
     }
   }
 
+  Future<void> _navigateToRestaurantSettings(Restaurant restaurant) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RestaurantSettingsScreen(
+          token: widget.token,
+          restaurantId: restaurant.id!,
+          restaurantName: restaurant.name,
+        ),
+      ),
+    );
+
+    if (result == true) {
+      _loadRestaurants();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -208,14 +307,14 @@ class _AdminRestaurantDashboardScreenState
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     child: Padding(
-                      padding: EdgeInsets.all(DashboardConstants.screenPadding),
+                      padding: const EdgeInsets.all(DashboardConstants.screenPadding),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildStatisticsCards(),
-                          SizedBox(height: DashboardConstants.sectionSpacing),
+                          const SizedBox(height: DashboardConstants.sectionSpacing),
                           _buildFiltersSection(),
-                          SizedBox(height: DashboardConstants.sectionSpacing),
+                          const SizedBox(height: DashboardConstants.sectionSpacing),
                           _buildRestaurantList(),
                         ],
                       ),
@@ -599,6 +698,12 @@ class _AdminRestaurantDashboardScreenState
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton.icon(
+                  onPressed: () => _navigateToRestaurantSettings(restaurant),
+                  icon: const Icon(Icons.settings, size: 18),
+                  label: const Text('Settings'),
+                ),
+                const SizedBox(width: 8),
+                TextButton.icon(
                   onPressed: () => _navigateToRestaurantMenus(restaurant),
                   icon: const Icon(Icons.restaurant_menu, size: 18),
                   label: const Text('View Menus'),
@@ -653,9 +758,9 @@ class _AdminRestaurantDashboardScreenState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

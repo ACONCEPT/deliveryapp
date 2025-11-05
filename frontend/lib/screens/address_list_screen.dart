@@ -230,6 +230,8 @@ class _AddressCard extends StatelessWidget {
                 ),
               ],
             ),
+            // Note: Coordinates are stored in the address model but hidden from user view.
+            // They are still sent to and retrieved from the API.
             const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,

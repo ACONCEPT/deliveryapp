@@ -283,7 +283,7 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            childAspectRatio: 0.75,
+            childAspectRatio: 0.95,
             crossAxisSpacing: DashboardConstants.gridSpacing,
             mainAxisSpacing: DashboardConstants.gridSpacing,
           ),

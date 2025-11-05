@@ -137,5 +137,29 @@ func (r *approvalRepository) GetApprovalStats() (*models.ApprovalDashboardRespon
 		return nil, fmt.Errorf("failed to count rejected restaurants: %w", err)
 	}
 
+	// Count pending drivers
+	err = r.DB.QueryRow(`
+		SELECT COUNT(*) FROM drivers WHERE approval_status = 'pending'
+	`).Scan(&stats.PendingDrivers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count pending drivers: %w", err)
+	}
+
+	// Count approved drivers
+	err = r.DB.QueryRow(`
+		SELECT COUNT(*) FROM drivers WHERE approval_status = 'approved'
+	`).Scan(&stats.ApprovedDrivers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count approved drivers: %w", err)
+	}
+
+	// Count rejected drivers
+	err = r.DB.QueryRow(`
+		SELECT COUNT(*) FROM drivers WHERE approval_status = 'rejected'
+	`).Scan(&stats.RejectedDrivers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count rejected drivers: %w", err)
+	}
+
 	return stats, nil
 }

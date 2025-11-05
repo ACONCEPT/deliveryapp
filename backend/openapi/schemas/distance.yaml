@@ -1,0 +1,402 @@
+DistanceRequestStatus:
+  type: string
+  enum:
+    - success
+    - error
+    - rate_limited
+    - invalid_coordinates
+    - timeout
+  example: success
+  description: |
+    Distance API request status values:
+    - success: Distance calculated successfully
+    - error: Generic error (network, API error, etc.)
+    - rate_limited: Mapbox API free tier limit exceeded
+    - invalid_coordinates: Cannot find route between locations
+    - timeout: API request timed out
+
+DistanceRequest:
+  type: object
+  description: Logged distance calculation request with metadata and result
+  properties:
+    id:
+      type: integer
+      example: 123
+      description: Unique distance request ID
+    user_id:
+      type: integer
+      example: 5
+      description: ID of user who made the request
+    origin_address_id:
+      type: integer
+      nullable: true
+      example: 1
+      description: Customer address ID (origin)
+    destination_restaurant_id:
+      type: integer
+      nullable: true
+      example: 5
+      description: Restaurant ID (destination)
+    origin_latitude:
+      type: number
+      format: double
+      nullable: true
+      example: 40.7128
+      description: Origin latitude coordinate
+    origin_longitude:
+      type: number
+      format: double
+      nullable: true
+      example: -74.0060
+      description: Origin longitude coordinate
+    destination_latitude:
+      type: number
+      format: double
+      nullable: true
+      example: 40.7580
+      description: Destination latitude coordinate
+    destination_longitude:
+      type: number
+      format: double
+      nullable: true
+      example: -73.9855
+      description: Destination longitude coordinate
+    status:
+      $ref: './distance.yaml#/DistanceRequestStatus'
+    distance_meters:
+      type: integer
+      nullable: true
+      example: 5280
+      description: Calculated distance in meters (only if status=success)
+    duration_seconds:
+      type: integer
+      nullable: true
+      example: 720
+      description: Estimated driving duration in seconds (only if status=success)
+    api_response_time_ms:
+      type: integer
+      nullable: true
+      example: 145
+      description: Mapbox API response time in milliseconds
+    error_message:
+      type: string
+      nullable: true
+      example: "Invalid coordinates provided"
+      description: Error message if request failed
+    mapbox_request_id:
+      type: string
+      nullable: true
+      example: "req_abc123xyz456"
+      description: Mapbox request UUID for debugging
+    created_at:
+      type: string
+      format: date-time
+      example: "2024-10-28T14:30:00Z"
+      description: Timestamp when request was made
+
+DistanceEstimateRequest:
+  type: object
+  required:
+    - address_id
+    - restaurant_id
+  properties:
+    address_id:
+      type: integer
+      minimum: 1
+      example: 1
+      description: Customer address ID (must exist and have coordinates)
+    restaurant_id:
+      type: integer
+      minimum: 1
+      example: 5
+      description: Restaurant ID (must exist and have coordinates)
+
+AddressInfo:
+  type: object
+  description: Address location information for distance response
+  properties:
+    address_id:
+      type: integer
+      nullable: true
+      example: 1
+    address_line1:
+      type: string
+      example: "123 Main St"
+    address_line2:
+      type: string
+      nullable: true
+      example: "Apt 4B"
+    city:
+      type: string
+      example: "New York"
+    state:
+      type: string
+      nullable: true
+      example: "NY"
+    postal_code:
+      type: string
+      nullable: true
+      example: "10001"
+    country:
+      type: string
+      example: "USA"
+    latitude:
+      type: number
+      format: double
+      nullable: true
+      example: 40.7128
+    longitude:
+      type: number
+      format: double
+      nullable: true
+      example: -74.0060
+
+RestaurantLocationInfo:
+  type: object
+  description: Restaurant location information for distance response
+  properties:
+    restaurant_id:
+      type: integer
+      example: 5
+    name:
+      type: string
+      example: "Pizza Palace"
+    address_line1:
+      type: string
+      nullable: true
+      example: "456 Broadway"
+    address_line2:
+      type: string
+      nullable: true
+      example: "Suite 200"
+    city:
+      type: string
+      nullable: true
+      example: "New York"
+    state:
+      type: string
+      nullable: true
+      example: "NY"
+    postal_code:
+      type: string
+      nullable: true
+      example: "10002"
+    country:
+      type: string
+      nullable: true
+      example: "USA"
+    latitude:
+      type: number
+      format: double
+      nullable: true
+      example: 40.7580
+    longitude:
+      type: number
+      format: double
+      nullable: true
+      example: -73.9855
+
+DistanceInfo:
+  type: object
+  description: Calculated distance in multiple units
+  required:
+    - meters
+    - miles
+    - kilometers
+  properties:
+    meters:
+      type: integer
+      example: 5280
+      description: Distance in meters
+    miles:
+      type: number
+      format: double
+      example: 3.28
+      description: Distance in miles
+    kilometers:
+      type: number
+      format: double
+      example: 5.28
+      description: Distance in kilometers
+
+DurationInfo:
+  type: object
+  description: Estimated driving duration in multiple formats
+  required:
+    - seconds
+    - minutes
+    - text
+  properties:
+    seconds:
+      type: integer
+      example: 720
+      description: Duration in seconds
+    minutes:
+      type: integer
+      example: 12
+      description: Duration in minutes (rounded down)
+    text:
+      type: string
+      example: "12 minutes"
+      description: Human-readable duration text
+
+DistanceEstimateResponse:
+  type: object
+  description: Successful distance calculation response with route information
+  required:
+    - origin
+    - destination
+    - distance
+    - duration
+    - calculated_at
+  properties:
+    origin:
+      $ref: './distance.yaml#/AddressInfo'
+    destination:
+      $ref: './distance.yaml#/RestaurantLocationInfo'
+    distance:
+      $ref: './distance.yaml#/DistanceInfo'
+    duration:
+      $ref: './distance.yaml#/DurationInfo'
+    calculated_at:
+      type: string
+      format: date-time
+      example: "2024-10-28T14:30:00Z"
+      description: Timestamp when distance was calculated
+  example:
+    origin:
+      address_id: 1
+      address_line1: "123 Main St"
+      address_line2: "Apt 4B"
+      city: "New York"
+      state: "NY"
+      postal_code: "10001"
+      country: "USA"
+      latitude: 40.7128
+      longitude: -74.0060
+    destination:
+      restaurant_id: 5
+      name: "Pizza Palace"
+      address_line1: "456 Broadway"
+      city: "New York"
+      state: "NY"
+      postal_code: "10002"
+      country: "USA"
+      latitude: 40.7580
+      longitude: -73.9855
+    distance:
+      meters: 5280
+      miles: 3.28
+      kilometers: 5.28
+    duration:
+      seconds: 720
+      minutes: 12
+      text: "12 minutes"
+    calculated_at: "2024-10-28T14:30:00Z"
+
+DailyAPIUsageStats:
+  type: object
+  description: Daily Mapbox API usage statistics
+  properties:
+    date:
+      type: string
+      format: date
+      example: "2024-10-28"
+      description: Date of statistics
+    total_requests:
+      type: integer
+      example: 245
+      description: Total API requests made on this date
+    successful_count:
+      type: integer
+      example: 230
+      description: Number of successful requests
+    error_count:
+      type: integer
+      example: 10
+      description: Number of failed requests
+    rate_limited_count:
+      type: integer
+      example: 5
+      description: Number of rate-limited requests
+    avg_response_time_ms:
+      type: integer
+      nullable: true
+      example: 150
+      description: Average API response time in milliseconds
+
+DistanceAPIUsageResponse:
+  type: object
+  description: Comprehensive API usage statistics for Mapbox Directions API
+  required:
+    - daily
+    - monthly
+    - stats
+  properties:
+    daily:
+      type: object
+      description: Today's usage
+      required:
+        - count
+      properties:
+        count:
+          type: integer
+          example: 47
+          description: Number of API requests today
+    monthly:
+      type: object
+      description: Current month's usage with limit information
+      required:
+        - count
+        - limit
+        - remaining
+        - usage_percent
+        - approaching_limit
+      properties:
+        count:
+          type: integer
+          example: 15420
+          description: Total requests this month
+        limit:
+          type: integer
+          example: 100000
+          description: Monthly free tier limit
+        remaining:
+          type: integer
+          example: 84580
+          description: Remaining requests before hitting limit
+        usage_percent:
+          type: string
+          example: "15.42%"
+          description: Percentage of monthly limit used
+        approaching_limit:
+          type: boolean
+          example: false
+          description: True if usage >= 80% of limit
+    stats:
+      type: array
+      description: Daily breakdown for last 30 days
+      items:
+        $ref: './distance.yaml#/DailyAPIUsageStats'
+  example:
+    daily:
+      count: 47
+    monthly:
+      count: 15420
+      limit: 100000
+      remaining: 84580
+      usage_percent: "15.42%"
+      approaching_limit: false
+    stats:
+      - date: "2024-10-28"
+        total_requests: 47
+        successful_count: 45
+        error_count: 2
+        rate_limited_count: 0
+        avg_response_time_ms: 145
+      - date: "2024-10-27"
+        total_requests: 532
+        successful_count: 520
+        error_count: 10
+        rate_limited_count: 2
+        avg_response_time_ms: 152

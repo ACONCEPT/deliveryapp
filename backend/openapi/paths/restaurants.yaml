@@ -4,9 +4,15 @@
       summary: Get restaurants
       description: |
         Retrieve restaurants. Behavior varies by user type:
-        - **Vendors**: Get only their own restaurants
-        - **Admins**: Get all restaurants
-        - **Customers/Drivers**: Get all active restaurants
+        - **Vendors**: Get only their own restaurants (no hours filtering)
+        - **Admins**: Get all restaurants (no hours filtering)
+        - **Customers/Drivers**: Get only approved and active restaurants that are currently open based on their configured hours of operation and timezone
+
+        **Hours Filtering (Customers/Drivers only):**
+        - Restaurants are filtered in real-time based on the current time in each restaurant's local timezone
+        - Restaurants without configured hours are included by default (treated as always open)
+        - Restaurants with invalid timezone or hours configuration are included with error logging
+        - The filtering is transparent to the client - closed restaurants simply don't appear in results
       tags:
         - Restaurants
       security:

@@ -16,9 +16,9 @@ class CustomerActiveOrdersScreen extends StatelessWidget {
   });
 
   /// Load active orders from API and filter/sort
-  Future<List<Order>> _loadActiveOrders() async {
+  Future<List<Order>> _loadActiveOrders(String? token) async {
     final orderService = OrderService();
-    final allOrders = await orderService.getCustomerOrders(token);
+    final allOrders = await orderService.getCustomerOrders();
 
     // Filter for active orders only
     final activeOrders = allOrders.where((order) => order.isActive).toList();
@@ -50,18 +50,18 @@ class CustomerActiveOrdersScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return PaginatedListScreen<Order>(
       title: 'Active Orders',
+      token: token,
+      appBarColor: Colors.deepOrange,
       loadItems: _loadActiveOrders,
-      itemBuilder: (context, order) => OrderCard(
+      itemBuilder: (order, index) => OrderCard(
         order: order,
         onTap: () => _navigateToOrderDetail(context, order),
         showReorderButton: false,
       ),
       emptyIcon: Icons.shopping_bag_outlined,
       emptyTitle: 'No Active Orders',
-      emptySubtitle: 'You don\'t have any active orders at the moment.\nPlace an order to get started!',
+      emptyMessage: 'You don\'t have any active orders at the moment.\nPlace an order to get started!',
       enableSearch: false,
-      appBarColor: Colors.deepOrange,
-      showRefreshButton: true,
     );
   }
 }

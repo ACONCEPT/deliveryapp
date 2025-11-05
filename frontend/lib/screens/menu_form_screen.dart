@@ -10,12 +10,14 @@ class MenuFormScreen extends StatefulWidget {
   final String token;
   final Menu? menu; // null for new menu, provided for editing
   final Restaurant? restaurant; // Optional: pre-selected restaurant for new menus
+  final String? userType; // User type for template import (admin/vendor)
 
   const MenuFormScreen({
     super.key,
     required this.token,
     this.menu,
     this.restaurant,
+    this.userType,
   });
 
   @override
@@ -384,6 +386,7 @@ class _MenuFormScreenState extends State<MenuFormScreen> {
                       builder: (context) => MenuBuilderScreen(
                         token: widget.token,
                         menu: widget.menu!,
+                        userType: widget.userType,
                       ),
                     ),
                   );
@@ -668,7 +671,7 @@ class _MenuFormScreenState extends State<MenuFormScreen> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<Restaurant>(
-          value: _selectedRestaurant,
+          initialValue: _selectedRestaurant,
           decoration: InputDecoration(
             hintText: 'Select a restaurant',
             prefixIcon: const Icon(Icons.restaurant),

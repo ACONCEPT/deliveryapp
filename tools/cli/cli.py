@@ -219,11 +219,14 @@ class DatabaseCLI:
             sample_users = [
                 ('customer1', 'customer1@example.com', 'password123', 'customer'),
                 ('vendor1', 'vendor1@example.com', 'password123', 'vendor'),
+                ('vendor2', 'vendor2@example.com', 'password123', 'vendor'),
+                ('vendor3', 'vendor3@example.com', 'password123', 'vendor'),
                 ('driver1', 'driver1@example.com', 'password123', 'driver'),
                 ('admin1', 'admin1@example.com', 'password123', 'admin'),
             ]
 
             print("\nCreating sample users...")
+            user_ids = {}
             for username, email, password, user_type in sample_users:
                 # Hash the password using bcrypt (same as Go backend)
                 password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -231,51 +234,321 @@ class DatabaseCLI:
                 self.cursor.execute("""
                     INSERT INTO users (username, email, password_hash, user_type)
                     VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (username) DO NOTHING
+                    ON CONFLICT (username) DO UPDATE SET email = EXCLUDED.email
                     RETURNING id
                 """, (username, email, password_hash, user_type))
 
                 result = self.cursor.fetchone()
                 if result:
                     user_id = result[0]
-                    print(f"  ✓ Created user: {username} ({user_type})")
+                    user_ids[username] = user_id
+                    print(f"  ✓ Created/Updated user: {username} ({user_type})")
 
-                    # Create corresponding profile table entry
+                    # Create corresponding profile table entry (with ON CONFLICT)
                     if user_type == 'customer':
                         self.cursor.execute("""
                             INSERT INTO customers (user_id, full_name, phone)
                             VALUES (%s, %s, %s)
+                            ON CONFLICT (user_id) DO UPDATE SET full_name = EXCLUDED.full_name
+                            RETURNING id
                         """, (user_id, f"Customer {username}", "+1234567890"))
+                        customer_id = self.cursor.fetchone()[0]
+                        user_ids[f"{username}_customer_id"] = customer_id
 
                     elif user_type == 'vendor':
                         self.cursor.execute("""
-                            INSERT INTO vendors (user_id, business_name, phone, city)
-                            VALUES (%s, %s, %s, %s)
-                        """, (user_id, f"Business {username}", "+1234567890", "New York"))
+                            INSERT INTO vendors (user_id, business_name, phone, city, approval_status)
+                            VALUES (%s, %s, %s, %s, %s)
+                            ON CONFLICT (user_id) DO UPDATE SET approval_status = 'approved'
+                            RETURNING id
+                        """, (user_id, f"Business {username}", "+1234567890", "New York", "approved"))
+                        vendor_id = self.cursor.fetchone()[0]
+                        user_ids[f"{username}_vendor_id"] = vendor_id
 
                     elif user_type == 'driver':
                         self.cursor.execute("""
                             INSERT INTO drivers (user_id, full_name, phone, vehicle_type)
                             VALUES (%s, %s, %s, %s)
+                            ON CONFLICT (user_id) DO UPDATE SET full_name = EXCLUDED.full_name
                         """, (user_id, f"Driver {username}", "+1234567890", "Car"))
 
                     elif user_type == 'admin':
                         self.cursor.execute("""
                             INSERT INTO admins (user_id, full_name, role)
                             VALUES (%s, %s, %s)
+                            ON CONFLICT (user_id) DO UPDATE SET role = EXCLUDED.role
+                            RETURNING id
                         """, (user_id, f"Admin {username}", "System Administrator"))
+                        admin_id = self.cursor.fetchone()[0]
+                        user_ids['admin_id'] = admin_id
+
+            # Create sample restaurants with varied cuisines and hours
+            print("\nCreating sample restaurants...")
+            restaurants = [
+                {
+                    'name': 'Pizza Paradise',
+                    'description': 'Authentic Italian pizza and pasta',
+                    'phone': '+12125551234',
+                    'address': '123 Main Street',
+                    'city': 'New York',
+                    'state': 'NY',
+                    'postal_code': '10001',
+                    'vendor': 'vendor1_vendor_id',
+                    'hours': {
+                        'monday': {'open': '11:00', 'close': '23:00', 'closed': False},
+                        'tuesday': {'open': '11:00', 'close': '23:00', 'closed': False},
+                        'wednesday': {'open': '11:00', 'close': '23:00', 'closed': False},
+                        'thursday': {'open': '11:00', 'close': '23:00', 'closed': False},
+                        'friday': {'open': '11:00', 'close': '00:00', 'closed': False},
+                        'saturday': {'open': '11:00', 'close': '00:00', 'closed': False},
+                        'sunday': {'open': '12:00', 'close': '22:00', 'closed': False}
+                    },
+                    'timezone': 'America/New_York'
+                },
+                {
+                    'name': 'Burger Haven',
+                    'description': 'Gourmet burgers and craft beers',
+                    'phone': '+12125555678',
+                    'address': '456 Broadway',
+                    'city': 'New York',
+                    'state': 'NY',
+                    'postal_code': '10002',
+                    'vendor': 'vendor2_vendor_id',
+                    'hours': {
+                        'monday': {'open': '10:00', 'close': '22:00', 'closed': False},
+                        'tuesday': {'open': '10:00', 'close': '22:00', 'closed': False},
+                        'wednesday': {'open': '10:00', 'close': '22:00', 'closed': False},
+                        'thursday': {'open': '10:00', 'close': '22:00', 'closed': False},
+                        'friday': {'open': '10:00', 'close': '23:00', 'closed': False},
+                        'saturday': {'open': '10:00', 'close': '23:00', 'closed': False},
+                        'sunday': {'open': '10:00', 'close': '21:00', 'closed': False}
+                    },
+                    'timezone': 'America/New_York'
+                },
+                {
+                    'name': 'Sushi Express',
+                    'description': 'Fresh sushi and Japanese cuisine',
+                    'phone': '+12125559012',
+                    'address': '789 5th Avenue',
+                    'city': 'New York',
+                    'state': 'NY',
+                    'postal_code': '10003',
+                    'vendor': 'vendor3_vendor_id',
+                    'hours': {
+                        'monday': {'open': '00:00', 'close': '23:59', 'closed': False},
+                        'tuesday': {'open': '00:00', 'close': '23:59', 'closed': False},
+                        'wednesday': {'open': '00:00', 'close': '23:59', 'closed': False},
+                        'thursday': {'open': '00:00', 'close': '23:59', 'closed': False},
+                        'friday': {'open': '00:00', 'close': '23:59', 'closed': False},
+                        'saturday': {'open': '00:00', 'close': '23:59', 'closed': False},
+                        'sunday': {'open': '00:00', 'close': '23:59', 'closed': False}
+                    },
+                    'timezone': 'America/New_York'
+                }
+            ]
+
+            import json
+            restaurant_ids = {}
+            for restaurant in restaurants:
+                self.cursor.execute("""
+                    INSERT INTO restaurants
+                    (name, description, phone, address_line1, city, state, postal_code,
+                     country, hours_of_operation, timezone, is_active, approval_status, approved_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    RETURNING id
+                """, (
+                    restaurant['name'],
+                    restaurant['description'],
+                    restaurant['phone'],
+                    restaurant['address'],
+                    restaurant['city'],
+                    restaurant['state'],
+                    restaurant['postal_code'],
+                    'USA',
+                    json.dumps(restaurant['hours']),
+                    restaurant['timezone'],
+                    True,  # is_active
+                    'approved'  # approval_status
+                ))
+                restaurant_id = self.cursor.fetchone()[0]
+                restaurant_ids[restaurant['name']] = restaurant_id
+                print(f"  ✓ Created restaurant: {restaurant['name']} (ID: {restaurant_id})")
+
+                # Link restaurant to vendor
+                vendor_id = user_ids[restaurant['vendor']]
+                self.cursor.execute("""
+                    INSERT INTO vendor_restaurants (vendor_id, restaurant_id)
+                    VALUES (%s, %s)
+                """, (vendor_id, restaurant_id))
+
+            # Create sample menus with menu items
+            print("\nCreating sample menus...")
+            menus = [
+                {
+                    'name': 'Pizza Paradise Main Menu',
+                    'description': 'Our signature pizzas and Italian dishes',
+                    'vendor': 'vendor1_vendor_id',
+                    'restaurant': 'Pizza Paradise',
+                    'config': {
+                        'categories': [
+                            {
+                                'id': 1,
+                                'name': 'Pizzas',
+                                'items': [
+                                    {'id': 1, 'name': 'Margherita', 'price': 12.99, 'description': 'Fresh mozzarella, basil, tomato sauce'},
+                                    {'id': 2, 'name': 'Pepperoni', 'price': 14.99, 'description': 'Classic pepperoni with mozzarella'},
+                                    {'id': 3, 'name': 'Quattro Formaggi', 'price': 15.99, 'description': 'Four cheese blend'},
+                                    {'id': 4, 'name': 'Vegetarian', 'price': 13.99, 'description': 'Fresh vegetables and herbs'},
+                                    {'id': 5, 'name': 'Meat Lovers', 'price': 16.99, 'description': 'Pepperoni, sausage, bacon, ham'}
+                                ]
+                            },
+                            {
+                                'id': 2,
+                                'name': 'Pasta',
+                                'items': [
+                                    {'id': 6, 'name': 'Spaghetti Carbonara', 'price': 13.99, 'description': 'Creamy sauce with pancetta'},
+                                    {'id': 7, 'name': 'Fettuccine Alfredo', 'price': 12.99, 'description': 'Rich cream and parmesan sauce'},
+                                    {'id': 8, 'name': 'Penne Arrabbiata', 'price': 11.99, 'description': 'Spicy tomato sauce'}
+                                ]
+                            },
+                            {
+                                'id': 3,
+                                'name': 'Appetizers',
+                                'items': [
+                                    {'id': 9, 'name': 'Garlic Bread', 'price': 5.99, 'description': 'Toasted with butter and garlic'},
+                                    {'id': 10, 'name': 'Bruschetta', 'price': 7.99, 'description': 'Tomato, basil, olive oil on toast'}
+                                ]
+                            }
+                        ]
+                    }
+                },
+                {
+                    'name': 'Burger Haven Menu',
+                    'description': 'Gourmet burgers and sides',
+                    'vendor': 'vendor2_vendor_id',
+                    'restaurant': 'Burger Haven',
+                    'config': {
+                        'categories': [
+                            {
+                                'id': 1,
+                                'name': 'Burgers',
+                                'items': [
+                                    {'id': 1, 'name': 'Classic Cheeseburger', 'price': 10.99, 'description': 'Angus beef, cheddar, lettuce, tomato'},
+                                    {'id': 2, 'name': 'Bacon BBQ Burger', 'price': 12.99, 'description': 'BBQ sauce, bacon, onion rings'},
+                                    {'id': 3, 'name': 'Mushroom Swiss', 'price': 11.99, 'description': 'Sautéed mushrooms, Swiss cheese'},
+                                    {'id': 4, 'name': 'Veggie Burger', 'price': 9.99, 'description': 'Black bean patty, avocado'},
+                                    {'id': 5, 'name': 'Double Deluxe', 'price': 14.99, 'description': 'Two patties, special sauce'}
+                                ]
+                            },
+                            {
+                                'id': 2,
+                                'name': 'Sides',
+                                'items': [
+                                    {'id': 6, 'name': 'French Fries', 'price': 4.99, 'description': 'Crispy golden fries'},
+                                    {'id': 7, 'name': 'Onion Rings', 'price': 5.99, 'description': 'Beer-battered onion rings'},
+                                    {'id': 8, 'name': 'Sweet Potato Fries', 'price': 5.99, 'description': 'Seasoned sweet potato fries'}
+                                ]
+                            },
+                            {
+                                'id': 3,
+                                'name': 'Drinks',
+                                'items': [
+                                    {'id': 9, 'name': 'Craft Beer', 'price': 6.99, 'description': 'Selection of local brews'},
+                                    {'id': 10, 'name': 'Milkshake', 'price': 5.99, 'description': 'Vanilla, chocolate, or strawberry'}
+                                ]
+                            }
+                        ]
+                    }
+                },
+                {
+                    'name': 'Sushi Express Menu',
+                    'description': 'Fresh sushi and Japanese specialties',
+                    'vendor': 'vendor3_vendor_id',
+                    'restaurant': 'Sushi Express',
+                    'config': {
+                        'categories': [
+                            {
+                                'id': 1,
+                                'name': 'Sushi Rolls',
+                                'items': [
+                                    {'id': 1, 'name': 'California Roll', 'price': 8.99, 'description': 'Crab, avocado, cucumber'},
+                                    {'id': 2, 'name': 'Spicy Tuna Roll', 'price': 10.99, 'description': 'Spicy tuna, cucumber, tempura flakes'},
+                                    {'id': 3, 'name': 'Dragon Roll', 'price': 13.99, 'description': 'Eel, cucumber, avocado'},
+                                    {'id': 4, 'name': 'Rainbow Roll', 'price': 14.99, 'description': 'Assorted fish over California roll'},
+                                    {'id': 5, 'name': 'Vegetable Roll', 'price': 7.99, 'description': 'Cucumber, avocado, carrot'}
+                                ]
+                            },
+                            {
+                                'id': 2,
+                                'name': 'Sashimi',
+                                'items': [
+                                    {'id': 6, 'name': 'Salmon Sashimi', 'price': 12.99, 'description': '5 pieces fresh salmon'},
+                                    {'id': 7, 'name': 'Tuna Sashimi', 'price': 13.99, 'description': '5 pieces fresh tuna'},
+                                    {'id': 8, 'name': 'Mixed Sashimi', 'price': 18.99, 'description': 'Assorted fresh fish'}
+                                ]
+                            },
+                            {
+                                'id': 3,
+                                'name': 'Hot Dishes',
+                                'items': [
+                                    {'id': 9, 'name': 'Chicken Teriyaki', 'price': 11.99, 'description': 'Grilled chicken with teriyaki sauce'},
+                                    {'id': 10, 'name': 'Tempura Combo', 'price': 13.99, 'description': 'Shrimp and vegetable tempura'},
+                                    {'id': 11, 'name': 'Ramen Bowl', 'price': 10.99, 'description': 'Noodle soup with pork and egg'}
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+
+            menu_ids = {}
+            for menu in menus:
+                vendor_id = user_ids[menu['vendor']]
+                self.cursor.execute("""
+                    INSERT INTO menus (name, description, menu_config, vendor_id, is_active)
+                    VALUES (%s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (
+                    menu['name'],
+                    menu['description'],
+                    json.dumps(menu['config']),
+                    vendor_id,
+                    True
+                ))
+                menu_id = self.cursor.fetchone()[0]
+                menu_ids[menu['name']] = menu_id
+                print(f"  ✓ Created menu: {menu['name']} (ID: {menu_id})")
+
+                # Link menu to restaurant
+                restaurant_id = restaurant_ids[menu['restaurant']]
+                self.cursor.execute("""
+                    INSERT INTO restaurant_menus (restaurant_id, menu_id, is_active, display_order)
+                    VALUES (%s, %s, %s, %s)
+                """, (restaurant_id, menu_id, True, 1))
 
             self.conn.commit()
             print("\n✓ Database seeded successfully")
-            print("\nSample credentials:")
+            print(f"\n📊 Summary:")
+            print(f"  • {len(user_ids)} users created")
+            print(f"  • {len(restaurant_ids)} restaurants created")
+            print(f"  • {len(menu_ids)} menus created")
+            print("\n🔐 Sample credentials:")
             print("  Username: customer1, Password: password123 (Customer)")
             print("  Username: vendor1,   Password: password123 (Vendor)")
+            print("  Username: vendor2,   Password: password123 (Vendor)")
+            print("  Username: vendor3,   Password: password123 (Vendor)")
             print("  Username: driver1,   Password: password123 (Driver)")
             print("  Username: admin1,    Password: password123 (Admin)")
+            print("\n🍕 Restaurants:")
+            print("  • Pizza Paradise (11 AM - 11 PM, Fri/Sat til midnight)")
+            print("  • Burger Haven (10 AM - 10 PM, Fri/Sat til 11 PM)")
+            print("  • Sushi Express (24/7 - ALWAYS OPEN for testing!)")
             return True
         except Exception as e:
             self.conn.rollback()
             print(f"✗ Error seeding database: {e}")
+            import traceback
+            traceback.print_exc()
             return False
         finally:
             self.disconnect()

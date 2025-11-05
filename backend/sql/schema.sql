@@ -1,6 +1,6 @@
 -- Delivery App Database Schema (CONSOLIDATED)
 -- PostgreSQL schema for delivery application with multi-user types
--- Last Updated: 2025-10-27
+-- Last Updated: 2025-10-30
 --
 -- This schema includes ALL incremental migrations consolidated into a single file:
 -- - 001_add_approval_system.sql: Vendor and restaurant approval workflow
@@ -8,7 +8,13 @@
 -- - 003_add_driver_assignment_constraints.sql: Driver assignment safety constraints
 -- - 003_add_system_settings.sql: System-wide configuration settings
 -- - 004_add_hours_of_operation.sql: Restaurant hours of operation
+-- - 005_distance_api.sql: Distance calculation API logging
+-- - 006_convert_to_timestamptz.sql: Timezone support (TIMESTAMPTZ + timezone columns)
 -- - add_vendor_to_menus.sql: Menu ownership by vendors
+--
+-- Seed Data:
+-- - China Garden restaurant (Big Pine Key, FL) with timezone America/New_York
+-- - customer1 address in Big Pine Key with timezone America/New_York
 
 -- ============================================================================
 -- EXTENSIONS
@@ -81,8 +87,8 @@ CREATE TABLE IF NOT EXISTS users (
     user_type user_type NOT NULL,
     user_role VARCHAR(50),
     status user_status DEFAULT 'active',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Add default constraint for user_role to match user_type if not provided
@@ -133,8 +139,8 @@ CREATE TABLE IF NOT EXISTS customers (
     full_name VARCHAR(255) NOT NULL,
     phone VARCHAR(20),
     default_address_id INTEGER,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Customer Addresses Table
@@ -149,10 +155,13 @@ CREATE TABLE IF NOT EXISTS customer_addresses (
     country VARCHAR(100) DEFAULT 'USA',
     latitude DECIMAL(10, 8),
     longitude DECIMAL(11, 8),
+    timezone VARCHAR(50),
     is_default BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
+
+COMMENT ON COLUMN customer_addresses.timezone IS 'IANA timezone identifier for delivery address location. Optional field that can differ from restaurant timezone.';
 
 -- Add foreign key for default address
 DO $$ BEGIN
@@ -169,6 +178,12 @@ END $$;
 INSERT INTO customers (user_id, full_name, phone) VALUES
     ((SELECT id FROM users WHERE username = 'customer1'), 'Customer customer1', '+1234567890')
 ON CONFLICT (user_id) DO NOTHING;
+
+-- Insert test customer address
+INSERT INTO customer_addresses (customer_id, address_line1, city, state, postal_code, country, timezone, is_default) VALUES
+    ((SELECT id FROM customers WHERE user_id = (SELECT id FROM users WHERE username = 'customer1')),
+     '29959 Overseas Highway', 'Big Pine Key', 'Florida', '33043', 'USA', 'America/New_York', TRUE)
+ON CONFLICT DO NOTHING;
 
 -- ============================================================================
 -- VENDOR PROFILE AND MANAGEMENT
@@ -194,13 +209,13 @@ CREATE TABLE IF NOT EXISTS vendors (
     total_orders INTEGER DEFAULT 0,
 
     -- Approval system columns (migration 001)
-    approval_status approval_status DEFAULT 'approved',
+    approval_status approval_status DEFAULT 'pending',
     approved_by_admin_id INTEGER,
-    approved_at TIMESTAMP,
+    approved_at TIMESTAMPTZ,
     rejection_reason TEXT,
 
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Add foreign key for approved_by_admin_id after admins table is created
@@ -219,8 +234,8 @@ CREATE TABLE IF NOT EXISTS vendor_users (
     role VARCHAR(50) DEFAULT 'staff',
     permissions JSONB,
     is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(vendor_id, user_id)
 );
 
@@ -242,31 +257,37 @@ CREATE TABLE IF NOT EXISTS restaurants (
     country VARCHAR(100) DEFAULT 'USA',
     latitude DECIMAL(10, 8),
     longitude DECIMAL(11, 8),
+    timezone VARCHAR(50) DEFAULT 'UTC' NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
     rating DECIMAL(3, 2) DEFAULT 0.00,
     total_orders INTEGER DEFAULT 0,
 
     -- Approval system columns (migration 001)
-    approval_status approval_status DEFAULT 'approved',
+    approval_status approval_status DEFAULT 'pending',
     approved_by_admin_id INTEGER,
-    approved_at TIMESTAMP,
+    approved_at TIMESTAMPTZ,
     rejection_reason TEXT,
 
     -- Hours of operation (migration 004)
     hours_of_operation JSONB,
 
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    -- Average preparation time in minutes
+    average_prep_time_minutes INTEGER DEFAULT 30,
+
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE restaurants IS 'Stores restaurant information. Each restaurant is owned by one vendor via vendor_restaurants table.';
 COMMENT ON COLUMN restaurants.rating IS 'Average rating from customer reviews (0.00 to 5.00)';
 COMMENT ON COLUMN restaurants.total_orders IS 'Total number of orders placed for this restaurant';
+COMMENT ON COLUMN restaurants.timezone IS 'IANA timezone identifier (e.g., America/New_York, America/Los_Angeles). All order timestamps use the restaurant''s timezone for display.';
 COMMENT ON COLUMN restaurants.approval_status IS 'Approval status: pending, approved, or rejected';
 COMMENT ON COLUMN restaurants.approved_by_admin_id IS 'Admin who approved/rejected the restaurant';
 COMMENT ON COLUMN restaurants.approved_at IS 'Timestamp when restaurant was approved';
 COMMENT ON COLUMN restaurants.rejection_reason IS 'Reason why restaurant was rejected (NULL if not rejected)';
 COMMENT ON COLUMN restaurants.hours_of_operation IS 'Weekly operating hours in JSONB format. Structure: {"monday": {"open": "09:00", "close": "22:00", "closed": false}, ...}';
+COMMENT ON COLUMN restaurants.average_prep_time_minutes IS 'Average preparation time in minutes for orders from this restaurant';
 
 -- Menus Table (with vendor_id from add_vendor_to_menus migration)
 CREATE TABLE IF NOT EXISTS menus (
@@ -276,8 +297,8 @@ CREATE TABLE IF NOT EXISTS menus (
     menu_config JSONB NOT NULL,
     vendor_id INTEGER REFERENCES vendors(id) ON DELETE CASCADE,
     is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE menus IS 'Stores menu templates that can be assigned to restaurants. Menu configuration stored as JSON. Each menu is owned by a vendor.';
@@ -291,8 +312,8 @@ CREATE TABLE IF NOT EXISTS restaurant_menus (
     menu_id INTEGER NOT NULL REFERENCES menus(id) ON DELETE CASCADE,
     is_active BOOLEAN DEFAULT FALSE,
     display_order INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(restaurant_id, menu_id)
 );
 
@@ -300,69 +321,68 @@ COMMENT ON TABLE restaurant_menus IS 'Junction table linking restaurants to thei
 COMMENT ON COLUMN restaurant_menus.is_active IS 'Indicates which menu the frontend should currently display for this restaurant. Only one menu per restaurant should be active.';
 COMMENT ON COLUMN restaurant_menus.display_order IS 'Order in which to display menus if multiple are available';
 
+-- Menu Customization Templates Table (Reusable customization templates)
+CREATE TABLE IF NOT EXISTS menu_customization_templates (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    customization_config JSONB NOT NULL,
+    vendor_id INTEGER REFERENCES vendors(id) ON DELETE CASCADE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(vendor_id, name)
+);
+
+COMMENT ON TABLE menu_customization_templates IS 'Reusable customization templates for menu items. Can be vendor-specific or system-wide (vendor_id=NULL).';
+COMMENT ON COLUMN menu_customization_templates.name IS 'Unique name for the customization template (e.g., "Spice Level", "Toppings", "Size Options")';
+COMMENT ON COLUMN menu_customization_templates.customization_config IS 'Flexible JSON structure for customization data - frontend defines the format';
+COMMENT ON COLUMN menu_customization_templates.vendor_id IS 'Owner of the template. NULL for system-wide templates (admin-created).';
+
 -- Vendor Restaurants Table (Links vendors to restaurants they own)
 CREATE TABLE IF NOT EXISTS vendor_restaurants (
     id SERIAL PRIMARY KEY,
     vendor_id INTEGER NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,
     restaurant_id INTEGER UNIQUE NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE vendor_restaurants IS 'Links vendors to restaurants they own. One vendor can own many restaurants, but each restaurant can only be owned by one vendor (enforced by UNIQUE constraint on restaurant_id).';
 
 -- Insert test restaurant data with default hours
-INSERT INTO restaurants (name, description, phone, address_line1, city, state, postal_code, country, is_active, approval_status, approved_at, hours_of_operation) VALUES
-    ('Pizza Palace', 'Authentic Italian pizza and pasta', '+1234567891', '123 Main St', 'New York', 'NY', '10001', 'USA', TRUE, 'approved', CURRENT_TIMESTAMP,
+INSERT INTO restaurants (name, description, phone, address_line1, city, state, postal_code, country, timezone, is_active, approval_status, approved_at, hours_of_operation) VALUES
+    ('China Garden', 'Authentic Chinese cuisine', '+1305872222', '209 Key Deer Boulevard', 'Big Pine Key', 'Florida', '33043', 'USA', 'America/New_York', TRUE, 'approved', CURRENT_TIMESTAMP,
      jsonb_build_object(
-        'monday', jsonb_build_object('open', '09:00', 'close', '22:00', 'closed', false),
-        'tuesday', jsonb_build_object('open', '09:00', 'close', '22:00', 'closed', false),
-        'wednesday', jsonb_build_object('open', '09:00', 'close', '22:00', 'closed', false),
-        'thursday', jsonb_build_object('open', '09:00', 'close', '22:00', 'closed', false),
-        'friday', jsonb_build_object('open', '09:00', 'close', '23:00', 'closed', false),
-        'saturday', jsonb_build_object('open', '10:00', 'close', '23:00', 'closed', false),
-        'sunday', jsonb_build_object('open', '10:00', 'close', '22:00', 'closed', false)
-     )),
-    ('Burger Haven', 'Gourmet burgers and fries', '+1234567892', '456 Oak Ave', 'New York', 'NY', '10002', 'USA', TRUE, 'approved', CURRENT_TIMESTAMP,
-     jsonb_build_object(
-        'monday', jsonb_build_object('open', '09:00', 'close', '22:00', 'closed', false),
-        'tuesday', jsonb_build_object('open', '09:00', 'close', '22:00', 'closed', false),
-        'wednesday', jsonb_build_object('open', '09:00', 'close', '22:00', 'closed', false),
-        'thursday', jsonb_build_object('open', '09:00', 'close', '22:00', 'closed', false),
-        'friday', jsonb_build_object('open', '09:00', 'close', '23:00', 'closed', false),
-        'saturday', jsonb_build_object('open', '10:00', 'close', '23:00', 'closed', false),
-        'sunday', jsonb_build_object('open', '10:00', 'close', '22:00', 'closed', false)
+        'monday', jsonb_build_object('open', '11:00', 'close', '21:00', 'closed', false),
+        'tuesday', jsonb_build_object('open', '11:00', 'close', '21:00', 'closed', false),
+        'wednesday', jsonb_build_object('open', '11:00', 'close', '21:00', 'closed', false),
+        'thursday', jsonb_build_object('open', '11:00', 'close', '21:00', 'closed', false),
+        'friday', jsonb_build_object('open', '11:00', 'close', '22:00', 'closed', false),
+        'saturday', jsonb_build_object('open', '11:00', 'close', '22:00', 'closed', false),
+        'sunday', jsonb_build_object('open', '11:00', 'close', '21:00', 'closed', false)
      ))
 ON CONFLICT DO NOTHING;
 
 -- Insert test menu data (owned by vendor1)
 INSERT INTO menus (name, description, menu_config, vendor_id, is_active) VALUES
-    ('Pizza Palace Main Menu', 'Main menu for Pizza Palace',
-    '{"categories": [{"id": 1, "name": "Pizzas", "items": [{"id": 1, "name": "Margherita", "price": 12.99, "description": "Classic tomato and mozzarella"}, {"id": 2, "name": "Pepperoni", "price": 14.99, "description": "Pepperoni and cheese"}]}, {"id": 2, "name": "Pasta", "items": [{"id": 3, "name": "Spaghetti Carbonara", "price": 13.99, "description": "Creamy pasta with bacon"}]}]}'::jsonb,
-    (SELECT id FROM vendors WHERE business_name = 'Business vendor1' LIMIT 1),
-    TRUE),
-    ('Burger Haven Main Menu', 'Main menu for Burger Haven',
-    '{"categories": [{"id": 1, "name": "Burgers", "items": [{"id": 1, "name": "Classic Burger", "price": 9.99, "description": "Beef patty with lettuce and tomato"}, {"id": 2, "name": "Cheese Burger", "price": 10.99, "description": "Beef patty with cheddar cheese"}]}, {"id": 2, "name": "Sides", "items": [{"id": 3, "name": "French Fries", "price": 3.99, "description": "Crispy golden fries"}]}]}'::jsonb,
+    ('China Garden Main Menu', 'Main menu for China Garden',
+    '{"categories": [{"id": 1, "name": "Appetizers", "items": [{"id": 1, "name": "Spring Rolls", "price": 6.99, "description": "Crispy vegetable spring rolls"}, {"id": 2, "name": "Dumplings", "price": 8.99, "description": "Steamed pork dumplings"}]}, {"id": 2, "name": "Entrees", "items": [{"id": 3, "name": "General Tso Chicken", "price": 14.99, "description": "Spicy chicken with broccoli"}, {"id": 4, "name": "Beef with Broccoli", "price": 15.99, "description": "Tender beef in brown sauce"}, {"id": 5, "name": "Lo Mein", "price": 12.99, "description": "Soft noodles with vegetables"}]}, {"id": 3, "name": "Rice & Noodles", "items": [{"id": 6, "name": "Fried Rice", "price": 9.99, "description": "Classic fried rice with egg and vegetables"}, {"id": 7, "name": "Chow Mein", "price": 11.99, "description": "Crispy noodles with vegetables"}]}]}'::jsonb,
     (SELECT id FROM vendors WHERE business_name = 'Business vendor1' LIMIT 1),
     TRUE)
 ON CONFLICT DO NOTHING;
 
 -- Link restaurants to menus
 INSERT INTO restaurant_menus (restaurant_id, menu_id, is_active, display_order) VALUES
-    ((SELECT id FROM restaurants WHERE name = 'Pizza Palace' LIMIT 1),
-     (SELECT id FROM menus WHERE name = 'Pizza Palace Main Menu' LIMIT 1),
-     TRUE, 1),
-    ((SELECT id FROM restaurants WHERE name = 'Burger Haven' LIMIT 1),
-     (SELECT id FROM menus WHERE name = 'Burger Haven Main Menu' LIMIT 1),
+    ((SELECT id FROM restaurants WHERE name = 'China Garden' LIMIT 1),
+     (SELECT id FROM menus WHERE name = 'China Garden Main Menu' LIMIT 1),
      TRUE, 1)
 ON CONFLICT (restaurant_id, menu_id) DO NOTHING;
 
 -- Link vendor to restaurants
 INSERT INTO vendor_restaurants (vendor_id, restaurant_id) VALUES
     ((SELECT id FROM vendors WHERE business_name = 'Business vendor1' LIMIT 1),
-     (SELECT id FROM restaurants WHERE name = 'Pizza Palace' LIMIT 1)),
-    ((SELECT id FROM vendors WHERE business_name = 'Business vendor1' LIMIT 1),
-     (SELECT id FROM restaurants WHERE name = 'Burger Haven' LIMIT 1))
+     (SELECT id FROM restaurants WHERE name = 'China Garden' LIMIT 1))
 ON CONFLICT (restaurant_id) DO NOTHING;
 
 -- ============================================================================
@@ -383,13 +403,20 @@ CREATE TABLE IF NOT EXISTS drivers (
     current_longitude DECIMAL(11, 8),
     rating DECIMAL(3, 2) DEFAULT 0.00,
     total_deliveries INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+    -- Approval system columns
+    approval_status approval_status DEFAULT 'pending',
+    approved_by_admin_id INTEGER,
+    approved_at TIMESTAMPTZ,
+    rejection_reason TEXT,
+
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Insert test driver profiles
-INSERT INTO drivers (user_id, full_name, phone, vehicle_type) VALUES
-    ((SELECT id FROM users WHERE username = 'driver1'), 'Driver driver1', '+1234567890', 'Car')
+INSERT INTO drivers (user_id, full_name, phone, vehicle_type, approval_status, approved_at) VALUES
+    ((SELECT id FROM users WHERE username = 'driver1'), 'Driver driver1', '+1234567890', 'Car', 'approved', CURRENT_TIMESTAMP)
 ON CONFLICT (user_id) DO NOTHING;
 
 -- ============================================================================
@@ -404,8 +431,8 @@ CREATE TABLE IF NOT EXISTS admins (
     phone VARCHAR(20),
     role VARCHAR(100),
     permissions JSONB,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Insert test admin profiles
@@ -434,23 +461,33 @@ EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
 
+DO $$ BEGIN
+    ALTER TABLE drivers
+        ADD CONSTRAINT fk_drivers_approved_by_admin
+        FOREIGN KEY (approved_by_admin_id)
+        REFERENCES admins(id)
+        ON DELETE SET NULL;
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
 -- ============================================================================
 -- APPROVAL HISTORY (Migration 001)
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS approval_history (
     id SERIAL PRIMARY KEY,
-    entity_type VARCHAR(50) NOT NULL, -- 'vendor' or 'restaurant'
-    entity_id INTEGER NOT NULL,       -- ID of the vendor or restaurant
+    entity_type VARCHAR(50) NOT NULL, -- 'vendor', 'restaurant', or 'driver'
+    entity_id INTEGER NOT NULL,       -- ID of the vendor, restaurant, or driver
     admin_id INTEGER NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
     action approval_status NOT NULL,   -- 'approved' or 'rejected' (not 'pending')
     reason TEXT,                       -- Reason for rejection (NULL for approvals)
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE approval_history IS 'Audit trail for vendor and restaurant approval/rejection events';
-COMMENT ON COLUMN approval_history.entity_type IS 'Type of entity being approved: vendor or restaurant';
-COMMENT ON COLUMN approval_history.entity_id IS 'ID of the vendor or restaurant being approved/rejected';
+COMMENT ON TABLE approval_history IS 'Audit trail for vendor, restaurant, and driver approval/rejection events';
+COMMENT ON COLUMN approval_history.entity_type IS 'Type of entity being approved: vendor, restaurant, or driver';
+COMMENT ON COLUMN approval_history.entity_id IS 'ID of the vendor, restaurant, or driver being approved/rejected';
 COMMENT ON COLUMN approval_history.action IS 'Approval action taken: approved or rejected';
 COMMENT ON COLUMN approval_history.reason IS 'Reason for rejection (NULL for approvals)';
 
@@ -465,6 +502,7 @@ CREATE TABLE IF NOT EXISTS orders (
     -- Foreign Keys
     customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+    restaurant_name VARCHAR(255) NOT NULL,
     delivery_address_id INTEGER REFERENCES customer_addresses(id) ON DELETE SET NULL,
     driver_id INTEGER REFERENCES drivers(id) ON DELETE SET NULL,
 
@@ -479,19 +517,19 @@ CREATE TABLE IF NOT EXISTS orders (
     total_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
 
     -- Timestamps
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    placed_at TIMESTAMP,  -- When customer placed order
-    confirmed_at TIMESTAMP,  -- When vendor confirmed
-    ready_at TIMESTAMP,  -- When order ready for pickup
-    delivered_at TIMESTAMP,  -- When delivered
-    cancelled_at TIMESTAMP,  -- When cancelled
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    placed_at TIMESTAMPTZ,  -- When customer placed order
+    confirmed_at TIMESTAMPTZ,  -- When vendor confirmed
+    ready_at TIMESTAMPTZ,  -- When order ready for pickup
+    delivered_at TIMESTAMPTZ,  -- When delivered
+    cancelled_at TIMESTAMPTZ,  -- When cancelled
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
 
     -- Additional Info
     special_instructions TEXT,
     cancellation_reason TEXT,
     estimated_preparation_time INTEGER,  -- in minutes
-    estimated_delivery_time TIMESTAMP,
+    estimated_delivery_time TIMESTAMPTZ,
 
     -- Metadata
     is_active BOOLEAN DEFAULT true,
@@ -506,6 +544,7 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 
 COMMENT ON TABLE orders IS 'Main orders table tracking customer orders from creation to delivery';
+COMMENT ON COLUMN orders.restaurant_name IS 'Restaurant name at time of order (denormalized for performance and historical accuracy)';
 COMMENT ON COLUMN orders.subtotal_amount IS 'Sum of all order items before tax and fees';
 COMMENT ON COLUMN orders.tax_amount IS 'Calculated tax amount based on location';
 COMMENT ON COLUMN orders.delivery_fee IS 'Delivery fee charged to customer';
@@ -551,8 +590,8 @@ CREATE TABLE IF NOT EXISTS order_items (
     line_total DECIMAL(10, 2) NOT NULL,
 
     -- Timestamps
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT order_items_positive_quantity CHECK (quantity > 0),
     CONSTRAINT order_items_positive_price CHECK (price_at_time >= 0),
@@ -580,7 +619,7 @@ CREATE TABLE IF NOT EXISTS order_status_history (
     metadata JSONB,  -- Additional context (e.g., reason codes, system info)
 
     -- Timestamp
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE order_status_history IS 'Audit trail for order status changes';
@@ -608,8 +647,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
     is_editable BOOLEAN DEFAULT true,
 
     -- Timestamps
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE system_settings IS 'System-wide configuration settings managed by admins';
@@ -643,7 +682,6 @@ INSERT INTO system_settings (setting_key, setting_value, data_type, description,
     ('estimated_prep_time_default', '30', 'number', 'Default preparation time in minutes if not specified', 'delivery', true),
     ('estimated_delivery_time_per_km', '2', 'number', 'Estimated delivery time per kilometer in minutes', 'delivery', true),
     ('delivery_radius_km', '20', 'number', 'Maximum delivery radius in kilometers', 'delivery', true),
-    ('free_delivery_threshold', '30.00', 'number', 'Order amount for free delivery in dollars', 'delivery', true),
     ('estimated_delivery_time', '45', 'number', 'Estimated delivery time in minutes', 'delivery', true),
     ('enable_contactless_delivery', 'true', 'boolean', 'Allow contactless delivery option', 'delivery', true),
 
@@ -667,6 +705,36 @@ INSERT INTO system_settings (setting_key, setting_value, data_type, description,
 ON CONFLICT (setting_key) DO NOTHING;
 
 -- ============================================================================
+-- MESSAGING SYSTEM
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS messages (
+    id SERIAL PRIMARY KEY,
+
+    -- Foreign Keys
+    sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+
+    -- Message Content
+    content TEXT NOT NULL CHECK (LENGTH(content) > 0 AND LENGTH(content) <= 5000),
+
+    -- Read Status
+    read_at TIMESTAMPTZ,
+
+    -- Timestamps
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+    -- Constraints
+    CONSTRAINT messages_no_self_messaging CHECK (sender_id != recipient_id)
+);
+
+COMMENT ON TABLE messages IS 'Messages between users (customers, vendors, admins). Drivers cannot send or receive messages.';
+COMMENT ON COLUMN messages.content IS 'Message content, limited to 5000 characters';
+COMMENT ON COLUMN messages.read_at IS 'Timestamp when recipient read the message';
+COMMENT ON CONSTRAINT messages_no_self_messaging ON messages IS 'Users cannot send messages to themselves';
+
+-- ============================================================================
 -- DASHBOARD WIDGETS
 -- ============================================================================
 
@@ -679,8 +747,8 @@ CREATE TABLE IF NOT EXISTS dashboard_widgets (
     route VARCHAR(255),
     description TEXT,
     is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- User Role Widgets Table (Maps widgets to user roles)
@@ -690,8 +758,8 @@ CREATE TABLE IF NOT EXISTS user_role_widgets (
     widget_id INTEGER NOT NULL REFERENCES dashboard_widgets(id) ON DELETE CASCADE,
     display_order INTEGER DEFAULT 0,
     is_enabled BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_role, widget_id)
 );
 
@@ -755,6 +823,7 @@ CREATE INDEX IF NOT EXISTS idx_admins_user_id ON admins(user_id);
 
 -- Address indexes
 CREATE INDEX IF NOT EXISTS idx_customer_addresses_customer_id ON customer_addresses(customer_id);
+CREATE INDEX IF NOT EXISTS idx_customer_addresses_timezone ON customer_addresses(timezone);
 
 -- Dashboard indexes
 CREATE INDEX IF NOT EXISTS idx_dashboard_widgets_key ON dashboard_widgets(widget_key);
@@ -765,6 +834,7 @@ CREATE INDEX IF NOT EXISTS idx_user_role_widgets_widget ON user_role_widgets(wid
 CREATE INDEX IF NOT EXISTS idx_restaurants_name ON restaurants(name);
 CREATE INDEX IF NOT EXISTS idx_restaurants_city ON restaurants(city);
 CREATE INDEX IF NOT EXISTS idx_restaurants_is_active ON restaurants(is_active);
+CREATE INDEX IF NOT EXISTS idx_restaurants_timezone ON restaurants(timezone);
 CREATE INDEX IF NOT EXISTS idx_restaurants_hours_of_operation ON restaurants USING GIN (hours_of_operation);
 CREATE INDEX IF NOT EXISTS idx_menus_name ON menus(name);
 CREATE INDEX IF NOT EXISTS idx_menus_vendor_id ON menus(vendor_id);
@@ -772,6 +842,9 @@ CREATE INDEX IF NOT EXISTS idx_menus_is_active ON menus(is_active);
 CREATE INDEX IF NOT EXISTS idx_restaurant_menus_restaurant_id ON restaurant_menus(restaurant_id);
 CREATE INDEX IF NOT EXISTS idx_restaurant_menus_menu_id ON restaurant_menus(menu_id);
 CREATE INDEX IF NOT EXISTS idx_restaurant_menus_is_active ON restaurant_menus(is_active);
+CREATE INDEX IF NOT EXISTS idx_menu_customization_templates_vendor_id ON menu_customization_templates(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_menu_customization_templates_is_active ON menu_customization_templates(is_active);
+CREATE INDEX IF NOT EXISTS idx_menu_customization_templates_name ON menu_customization_templates(name);
 CREATE INDEX IF NOT EXISTS idx_vendor_restaurants_vendor_id ON vendor_restaurants(vendor_id);
 CREATE INDEX IF NOT EXISTS idx_vendor_restaurants_restaurant_id ON vendor_restaurants(restaurant_id);
 
@@ -780,6 +853,8 @@ CREATE INDEX IF NOT EXISTS idx_vendors_approval_status ON vendors(approval_statu
 CREATE INDEX IF NOT EXISTS idx_vendors_approved_by ON vendors(approved_by_admin_id) WHERE approved_by_admin_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_restaurants_approval_status ON restaurants(approval_status);
 CREATE INDEX IF NOT EXISTS idx_restaurants_approved_by ON restaurants(approved_by_admin_id) WHERE approved_by_admin_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_drivers_approval_status ON drivers(approval_status);
+CREATE INDEX IF NOT EXISTS idx_drivers_approved_by ON drivers(approved_by_admin_id) WHERE approved_by_admin_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_approval_history_entity ON approval_history(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_approval_history_admin ON approval_history(admin_id);
 CREATE INDEX IF NOT EXISTS idx_approval_history_action ON approval_history(action);
@@ -820,6 +895,13 @@ CREATE INDEX IF NOT EXISTS idx_system_settings_key ON system_settings(setting_ke
 CREATE INDEX IF NOT EXISTS idx_system_settings_category ON system_settings(category);
 CREATE INDEX IF NOT EXISTS idx_system_settings_editable ON system_settings(is_editable);
 
+-- Messaging system indexes
+CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id);
+CREATE INDEX IF NOT EXISTS idx_messages_recipient_id ON messages(recipient_id);
+CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(sender_id, recipient_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_unread ON messages(recipient_id, read_at) WHERE read_at IS NULL;
+
 -- ============================================================================
 -- FUNCTIONS AND TRIGGERS
 -- ============================================================================
@@ -828,10 +910,12 @@ CREATE INDEX IF NOT EXISTS idx_system_settings_editable ON system_settings(is_ed
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
+    NEW.updated_at = CURRENT_TIMESTAMP AT TIME ZONE 'UTC';
     RETURN NEW;
 END;
 $$ language 'plpgsql';
+
+COMMENT ON FUNCTION update_updated_at_column() IS 'Automatically sets updated_at to current UTC timestamp when a row is modified';
 
 -- Function to automatically log order status changes (Migration 002)
 CREATE OR REPLACE FUNCTION log_order_status_change()
@@ -901,6 +985,10 @@ DROP TRIGGER IF EXISTS update_restaurant_menus_updated_at ON restaurant_menus;
 CREATE TRIGGER update_restaurant_menus_updated_at BEFORE UPDATE ON restaurant_menus
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_menu_customization_templates_updated_at ON menu_customization_templates;
+CREATE TRIGGER update_menu_customization_templates_updated_at BEFORE UPDATE ON menu_customization_templates
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 DROP TRIGGER IF EXISTS update_vendor_restaurants_updated_at ON vendor_restaurants;
 CREATE TRIGGER update_vendor_restaurants_updated_at BEFORE UPDATE ON vendor_restaurants
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -924,9 +1012,62 @@ CREATE TRIGGER trigger_log_order_status_change
     FOR EACH ROW
     EXECUTE FUNCTION log_order_status_change();
 
+-- Messaging triggers
+DROP TRIGGER IF EXISTS update_messages_updated_at ON messages;
+CREATE TRIGGER update_messages_updated_at BEFORE UPDATE ON messages
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- ============================================================================
 -- SCHEMA CONSOLIDATION COMPLETE
 -- ============================================================================
+
+-- ============================================================================
+-- DISTANCE API LOGGING
+-- ============================================================================
+
+-- Distance request status enum
+DO $$ BEGIN
+    CREATE TYPE distance_request_status AS ENUM ('success', 'error', 'rate_limited', 'invalid_coordinates', 'timeout');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- Distance API request logs table
+CREATE TABLE IF NOT EXISTS distance_requests (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    origin_address_id INTEGER REFERENCES customer_addresses(id) ON DELETE SET NULL,
+    destination_restaurant_id INTEGER REFERENCES restaurants(id) ON DELETE SET NULL,
+
+    -- Request details
+    origin_latitude DECIMAL(10, 8),
+    origin_longitude DECIMAL(11, 8),
+    destination_latitude DECIMAL(10, 8),
+    destination_longitude DECIMAL(11, 8),
+
+    -- Response details
+    status distance_request_status NOT NULL,
+    distance_meters INTEGER,
+    duration_seconds INTEGER,
+    api_response_time_ms INTEGER,
+    error_message TEXT,
+
+    -- Metadata
+    mapbox_request_id VARCHAR(255),
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for distance_requests
+CREATE INDEX IF NOT EXISTS idx_distance_requests_user_id ON distance_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_distance_requests_origin_address ON distance_requests(origin_address_id);
+CREATE INDEX IF NOT EXISTS idx_distance_requests_destination_restaurant ON distance_requests(destination_restaurant_id);
+CREATE INDEX IF NOT EXISTS idx_distance_requests_created_at ON distance_requests(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_distance_requests_status ON distance_requests(status);
+CREATE INDEX IF NOT EXISTS idx_distance_requests_daily_usage ON distance_requests(created_at) WHERE status = 'success';
+
+COMMENT ON TABLE distance_requests IS 'Logs all Mapbox API distance calculation requests for monitoring, analytics, and rate limit tracking';
+COMMENT ON COLUMN distance_requests.status IS 'Request outcome: success, error, rate_limited, invalid_coordinates, timeout';
+COMMENT ON COLUMN distance_requests.api_response_time_ms IS 'Time taken for Mapbox API to respond in milliseconds';
 
 DO $$
 BEGIN
@@ -939,6 +1080,14 @@ BEGIN
     RAISE NOTICE '  - 003 (driver): Driver assignment safety constraints';
     RAISE NOTICE '  - 003 (settings): System-wide configuration settings';
     RAISE NOTICE '  - 004: Restaurant hours of operation';
+    RAISE NOTICE '  - 005: Distance API logging and request tracking';
+    RAISE NOTICE '  - 006: TIMESTAMPTZ conversion and timezone support';
     RAISE NOTICE '  - add_vendor_to_menus: Menu ownership tracking';
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'Seed data:';
+    RAISE NOTICE '  - 4 test users (customer1, vendor1, driver1, admin1)';
+    RAISE NOTICE '  - 1 restaurant: China Garden (Big Pine Key, FL)';
+    RAISE NOTICE '  - 1 customer address in Big Pine Key';
+    RAISE NOTICE '  - All timezone fields properly configured';
     RAISE NOTICE '========================================';
 END $$;

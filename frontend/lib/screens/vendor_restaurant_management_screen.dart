@@ -3,6 +3,7 @@ import '../models/restaurant.dart';
 import '../models/restaurant_request.dart';
 import '../services/restaurant_service.dart';
 import 'restaurant_form_screen.dart';
+import 'vendor/restaurant_settings_screen.dart';
 
 class VendorRestaurantManagementScreen extends StatefulWidget {
   final String token;
@@ -175,6 +176,23 @@ class _VendorRestaurantManagementScreenState
     }
   }
 
+  Future<void> _navigateToRestaurantSettings(Restaurant restaurant) async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RestaurantSettingsScreen(
+          token: widget.token,
+          restaurantId: restaurant.id!,
+          restaurantName: restaurant.name,
+        ),
+      ),
+    );
+
+    if (result == true) {
+      _loadRestaurants(); // Reload list if settings were updated
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -277,6 +295,7 @@ class _VendorRestaurantManagementScreenState
             onEdit: () => _navigateToEditRestaurant(restaurant),
             onDelete: () => _deleteRestaurant(restaurant.id!),
             onToggleActive: () => _toggleActiveStatus(restaurant),
+            onSettings: () => _navigateToRestaurantSettings(restaurant),
           );
         },
       ),
@@ -289,12 +308,14 @@ class _RestaurantCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onToggleActive;
+  final VoidCallback onSettings;
 
   const _RestaurantCard({
     required this.restaurant,
     required this.onEdit,
     required this.onDelete,
     required this.onToggleActive,
+    required this.onSettings,
   });
 
   @override
@@ -396,6 +417,14 @@ class _RestaurantCard extends StatelessWidget {
                       ),
                     ],
                   ),
+                ),
+
+                // Settings button
+                IconButton(
+                  onPressed: onSettings,
+                  icon: const Icon(Icons.settings),
+                  color: Colors.deepOrange,
+                  tooltip: 'Settings',
                 ),
 
                 // Edit button

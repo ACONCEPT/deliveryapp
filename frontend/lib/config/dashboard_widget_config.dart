@@ -21,6 +21,12 @@ class DashboardWidgetConfig {
       case UserTypeConfig.admin:
         return [
           const DashboardWidgetConfig(
+            title: 'User Admin',
+            icon: Icons.people,
+            color: Colors.red,
+            route: '/admin/users',
+          ),
+          const DashboardWidgetConfig(
             title: 'System Settings',
             icon: Icons.settings,
             color: Colors.deepPurple,
@@ -31,6 +37,12 @@ class DashboardWidgetConfig {
             icon: Icons.approval,
             color: Colors.green,
             route: '/admin/approvals',
+          ),
+          const DashboardWidgetConfig(
+            title: 'Customization Templates',
+            icon: Icons.layers,
+            color: Colors.teal,
+            route: '/admin/customization-templates',
           ),
           const DashboardWidgetConfig(
             title: 'Restaurant Admin',
@@ -70,6 +82,12 @@ class DashboardWidgetConfig {
             icon: Icons.restaurant_menu,
             color: Colors.blue,
             route: '/vendor/restaurant-selector',
+          ),
+          const DashboardWidgetConfig(
+            title: 'Customization Templates',
+            icon: Icons.layers,
+            color: Colors.teal,
+            route: '/vendor/customization-templates',
           ),
         ];
 

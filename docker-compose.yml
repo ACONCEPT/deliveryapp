@@ -24,12 +24,16 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: delivery_app_api
+    env_file:
+      - .env  # Load environment variables from root .env file
     environment:
+      # These override values from .env if needed
       DATABASE_URL: postgres://delivery_user:delivery_pass@postgres:5432/delivery_app?sslmode=disable
       SERVER_PORT: 8080
       JWT_SECRET: change-this-secret-key-in-production
       TOKEN_DURATION: 72
       ENVIRONMENT: development
+      # MAPBOX_ACCESS_TOKEN will be loaded from .env file
     ports:
       - "8080:8080"
     depends_on:
