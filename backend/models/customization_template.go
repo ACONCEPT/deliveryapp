@@ -1,17 +1,19 @@
 package models
 
-import "time"
+import (
+	"delivery_app/backend/models/base"
+)
 
 // MenuCustomizationTemplate represents a reusable customization template
 type MenuCustomizationTemplate struct {
-	ID                   int       `json:"id" db:"id"`
-	Name                 string    `json:"name" db:"name"`
-	Description          *string   `json:"description,omitempty" db:"description"`
-	CustomizationConfig  string    `json:"customization_config" db:"customization_config"` // JSONB as string
-	VendorID             *int      `json:"vendor_id,omitempty" db:"vendor_id"`              // Null for system-wide templates
-	IsActive             bool      `json:"is_active" db:"is_active"`
-	CreatedAt            time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt            time.Time `json:"updated_at" db:"updated_at"`
+	base.Timestamps `db:""` // Embedded timestamps (created_at, updated_at)
+
+	ID                  int     `json:"id" db:"id"`
+	Name                string  `json:"name" db:"name"`
+	Description         *string `json:"description,omitempty" db:"description"`
+	CustomizationConfig string  `json:"customization_config" db:"customization_config"` // JSONB as string
+	VendorID            *int    `json:"vendor_id,omitempty" db:"vendor_id"`             // Null for system-wide templates
+	IsActive            bool    `json:"is_active" db:"is_active"`
 }
 
 // CreateCustomizationTemplateRequest for creating a new customization template

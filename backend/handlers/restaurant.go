@@ -3,6 +3,7 @@ package handlers
 import (
 	"delivery_app/backend/middleware"
 	"delivery_app/backend/models"
+	"delivery_app/backend/models/base"
 	"delivery_app/backend/utils"
 	"encoding/json"
 	"log"
@@ -30,11 +31,11 @@ func (h *Handler) CreateRestaurant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if vendor is approved
-	if vendor.ApprovalStatus != string(models.ApprovalStatusApproved) {
+	if vendor.ApprovalStatus != base.ApprovalStatusApproved {
 		var message string
-		if vendor.ApprovalStatus == string(models.ApprovalStatusPending) {
+		if vendor.ApprovalStatus == base.ApprovalStatusPending {
 			message = "Your vendor account is pending approval. You cannot create restaurants until approved by an administrator."
-		} else if vendor.ApprovalStatus == string(models.ApprovalStatusRejected) {
+		} else if vendor.ApprovalStatus == base.ApprovalStatusRejected {
 			rejectionMsg := "Your vendor account has been rejected."
 			if vendor.RejectionReason != nil {
 				rejectionMsg += " Reason: " + *vendor.RejectionReason
@@ -56,17 +57,23 @@ func (h *Handler) CreateRestaurant(w http.ResponseWriter, r *http.Request) {
 
 	// Create restaurant model - will be set to pending by default via database migration
 	restaurant := &models.Restaurant{
+		FullAddress: base.FullAddress{
+			AddressFields: base.AddressFields{
+				AddressLine1: req.AddressLine1,
+				AddressLine2: req.AddressLine2,
+				City:         req.City,
+				State:        req.State,
+				PostalCode:   req.PostalCode,
+				Country:      req.Country,
+			},
+			GeoLocation: base.GeoLocation{
+				Latitude:  req.Latitude,
+				Longitude: req.Longitude,
+			},
+		},
 		Name:             req.Name,
 		Description:      req.Description,
 		Phone:            req.Phone,
-		AddressLine1:     req.AddressLine1,
-		AddressLine2:     req.AddressLine2,
-		City:             req.City,
-		State:            req.State,
-		PostalCode:       req.PostalCode,
-		Country:          req.Country,
-		Latitude:         req.Latitude,
-		Longitude:        req.Longitude,
 		HoursOfOperation: req.HoursOfOperation,
 		IsActive:         false, // Set to false - will be activated upon approval
 	}
@@ -194,7 +201,7 @@ func (h *Handler) GetRestaurant(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if user.UserType == models.UserTypeCustomer || user.UserType == models.UserTypeDriver {
 		// Customers and drivers can only view approved and active restaurants
-		if !restaurant.IsActive || restaurant.ApprovalStatus != string(models.ApprovalStatusApproved) {
+		if !restaurant.IsActive || restaurant.ApprovalStatus != base.ApprovalStatusApproved {
 			sendError(w, http.StatusNotFound, "Restaurant not found")
 			return
 		}

@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"time"
+
+	"delivery_app/backend/models/base"
 )
 
 // Custom nullable types with proper JSON serialization
@@ -107,6 +109,8 @@ const (
 
 // Order represents a customer order
 type Order struct {
+	base.Timestamps `db:""` // Embedded timestamps (created_at, updated_at)
+
 	ID                       int         `json:"id" db:"id"`
 	CustomerID               int         `json:"customer_id" db:"customer_id"`
 	RestaurantID             int         `json:"restaurant_id" db:"restaurant_id"`
@@ -119,13 +123,11 @@ type Order struct {
 	DeliveryFee              float64     `json:"delivery_fee" db:"delivery_fee"`
 	DiscountAmount           float64     `json:"discount_amount" db:"discount_amount"`
 	TotalAmount              float64     `json:"total_amount" db:"total_amount"`
-	CreatedAt                time.Time   `json:"created_at" db:"created_at"`
 	PlacedAt                 NullTime    `json:"placed_at" db:"placed_at"`
 	ConfirmedAt              NullTime    `json:"confirmed_at" db:"confirmed_at"`
 	ReadyAt                  NullTime    `json:"ready_at" db:"ready_at"`
 	DeliveredAt              NullTime    `json:"delivered_at" db:"delivered_at"`
 	CancelledAt              NullTime    `json:"cancelled_at" db:"cancelled_at"`
-	UpdatedAt                time.Time   `json:"updated_at" db:"updated_at"`
 	SpecialInstructions      NullString  `json:"special_instructions" db:"special_instructions"`
 	CancellationReason       NullString  `json:"cancellation_reason" db:"cancellation_reason"`
 	EstimatedPreparationTime NullInt64   `json:"estimated_preparation_time" db:"estimated_preparation_time"`
@@ -135,6 +137,8 @@ type Order struct {
 
 // OrderItem represents an item in an order
 type OrderItem struct {
+	base.Timestamps `db:""` // Embedded timestamps (created_at, updated_at)
+
 	ID                  int             `json:"id" db:"id"`
 	OrderID             int             `json:"order_id" db:"order_id"`
 	MenuItemName        string          `json:"menu_item_name" db:"menu_item_name"`
@@ -143,8 +147,6 @@ type OrderItem struct {
 	Quantity            int             `json:"quantity" db:"quantity"`
 	Customizations      json.RawMessage `json:"customizations" db:"customizations"`
 	LineTotal           float64         `json:"line_total" db:"line_total"`
-	CreatedAt           time.Time       `json:"created_at" db:"created_at"`
-	UpdatedAt           time.Time       `json:"updated_at" db:"updated_at"`
 }
 
 // OrderStatusHistory represents the audit trail for order status changes

@@ -2,6 +2,8 @@
 /// Represents distance and duration estimates from the backend API
 library;
 
+import 'base/json_parsers.dart';
+
 /// Distance information in multiple units
 class DistanceInfo {
   final int meters;
@@ -17,8 +19,8 @@ class DistanceInfo {
   factory DistanceInfo.fromJson(Map<String, dynamic> json) {
     return DistanceInfo(
       meters: json['meters'] as int? ?? 0,
-      miles: (json['miles'] as num?)?.toDouble() ?? 0.0,
-      kilometers: (json['kilometers'] as num?)?.toDouble() ?? 0.0,
+      miles: JsonParsers.parseDoubleWithDefault(json['miles'], 0.0),
+      kilometers: JsonParsers.parseDoubleWithDefault(json['kilometers'], 0.0),
     );
   }
 

@@ -1,7 +1,12 @@
-/// System settings data models for admin configuration management
+/// System settings data models for admin configuration management.
 ///
 /// Models for system-wide configuration settings that can be managed by administrators.
 /// Settings are grouped by category and support different data types (string, number, boolean, json).
+library;
+
+import 'base/enum_helpers.dart';
+import 'base/json_parsers.dart';
+import 'base/api_response.dart';
 
 /// Enum representing supported data types for system settings
 enum SettingDataType {
@@ -10,20 +15,9 @@ enum SettingDataType {
   boolean,
   json;
 
-  /// Convert string to SettingDataType enum
+  /// Convert string to SettingDataType enum using EnumHelpers
   static SettingDataType fromString(String type) {
-    switch (type.toLowerCase()) {
-      case 'string':
-        return SettingDataType.string;
-      case 'number':
-        return SettingDataType.number;
-      case 'boolean':
-        return SettingDataType.boolean;
-      case 'json':
-        return SettingDataType.json;
-      default:
-        throw ArgumentError('Unknown data type: $type');
-    }
+    return EnumHelpers.enumFromString(SettingDataType.values, type);
   }
 
   /// Convert enum to string for API
@@ -104,7 +98,7 @@ class SystemSetting {
   /// Get string value (always available)
   String get stringValue => settingValue;
 
-  /// Create from JSON
+  /// Create from JSON using base utilities
   factory SystemSetting.fromJson(Map<String, dynamic> json) {
     return SystemSetting(
       id: json['id'] as int,
@@ -114,8 +108,8 @@ class SystemSetting {
       description: json['description'] as String,
       category: json['category'] as String,
       isEditable: json['is_editable'] as bool,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      createdAt: JsonParsers.parseDateTime(json['created_at'])!,
+      updatedAt: JsonParsers.parseDateTime(json['updated_at'])!,
     );
   }
 
@@ -185,27 +179,21 @@ class SystemSetting {
   }
 }
 
-/// Response from GET /api/admin/settings
-class SettingsResponse {
-  final bool success;
-  final String message;
+/// Structured data class for settings grouped by category with metadata
+class SettingsData {
   final Map<String, List<SystemSetting>> settings; // Settings grouped by category
   final int totalCount;
   final int categoriesCount;
 
-  SettingsResponse({
-    required this.success,
-    required this.message,
+  SettingsData({
     required this.settings,
     required this.totalCount,
     required this.categoriesCount,
   });
 
-  /// Create from JSON
-  factory SettingsResponse.fromJson(Map<String, dynamic> json) {
-    final settingsData = json['data'] as Map<String, dynamic>;
-    final settingsByCategory =
-        settingsData['settings'] as Map<String, dynamic>;
+  /// Create from JSON data object
+  factory SettingsData.fromJson(Map<String, dynamic> data) {
+    final settingsByCategory = data['settings'] as Map<String, dynamic>;
 
     // Parse settings grouped by category
     final Map<String, List<SystemSetting>> parsedSettings = {};
@@ -215,12 +203,10 @@ class SettingsResponse {
           .toList();
     });
 
-    return SettingsResponse(
-      success: json['success'] as bool,
-      message: json['message'] as String,
+    return SettingsData(
       settings: parsedSettings,
-      totalCount: settingsData['total_count'] as int,
-      categoriesCount: settingsData['categories_count'] as int,
+      totalCount: data['total_count'] as int,
+      categoriesCount: data['categories_count'] as int,
     );
   }
 
@@ -238,6 +224,48 @@ class SettingsResponse {
   List<String> get categories {
     return settings.keys.toList();
   }
+}
+
+/// Response from GET /api/admin/settings
+/// Uses ApiResponse with custom data parser for complex structure
+class SettingsResponse {
+  final bool success;
+  final String message;
+  final SettingsData data;
+
+  SettingsResponse({
+    required this.success,
+    required this.message,
+    required this.data,
+  });
+
+  /// Create from JSON using custom data parsing
+  factory SettingsResponse.fromJson(Map<String, dynamic> json) {
+    return SettingsResponse(
+      success: json['success'] as bool,
+      message: json['message'] as String,
+      data: SettingsData.fromJson(json['data'] as Map<String, dynamic>),
+    );
+  }
+
+  /// Get all settings as flat list (convenience method)
+  List<SystemSetting> get allSettings => data.allSettings;
+
+  /// Get settings for a specific category (convenience method)
+  List<SystemSetting> getSettingsForCategory(String category) =>
+      data.getSettingsForCategory(category);
+
+  /// Get all category names (convenience method)
+  List<String> get categories => data.categories;
+
+  /// Get total count (convenience method for service compatibility)
+  int get totalCount => data.totalCount;
+
+  /// Get categories count (convenience method for service compatibility)
+  int get categoriesCount => data.categoriesCount;
+
+  /// Get settings grouped by category (convenience method for screen compatibility)
+  Map<String, List<SystemSetting>> get settings => data.settings;
 }
 
 /// Request to update a single setting
@@ -333,25 +361,18 @@ class BatchUpdateError {
   }
 }
 
-/// Response from GET /api/admin/settings/categories
-class CategoriesResponse {
-  final bool success;
-  final String message;
+/// Data class for categories list with count
+class CategoriesData {
   final List<String> categories;
   final int count;
 
-  CategoriesResponse({
-    required this.success,
-    required this.message,
+  CategoriesData({
     required this.categories,
     required this.count,
   });
 
-  factory CategoriesResponse.fromJson(Map<String, dynamic> json) {
-    final data = json['data'] as Map<String, dynamic>;
-    return CategoriesResponse(
-      success: json['success'] as bool,
-      message: json['message'] as String,
+  factory CategoriesData.fromJson(Map<String, dynamic> data) {
+    return CategoriesData(
       categories:
           (data['categories'] as List).map((c) => c as String).toList(),
       count: data['count'] as int,
@@ -359,44 +380,52 @@ class CategoriesResponse {
   }
 }
 
-/// Single setting response wrapper
-class SingleSettingResponse {
+/// Response from GET /api/admin/settings/categories
+/// Uses custom wrapper to maintain compatibility with existing code
+class CategoriesResponse {
   final bool success;
   final String message;
-  final SystemSetting setting;
+  final CategoriesData data;
 
-  SingleSettingResponse({
-    required this.success,
-    required this.message,
-    required this.setting,
-  });
-
-  factory SingleSettingResponse.fromJson(Map<String, dynamic> json) {
-    return SingleSettingResponse(
-      success: json['success'] as bool,
-      message: json['message'] as String,
-      setting: SystemSetting.fromJson(json['data'] as Map<String, dynamic>),
-    );
-  }
-}
-
-/// Batch update response wrapper
-class BatchUpdateResponse {
-  final bool success;
-  final String message;
-  final BatchUpdateResult data;
-
-  BatchUpdateResponse({
+  CategoriesResponse({
     required this.success,
     required this.message,
     required this.data,
   });
 
-  factory BatchUpdateResponse.fromJson(Map<String, dynamic> json) {
-    return BatchUpdateResponse(
+  factory CategoriesResponse.fromJson(Map<String, dynamic> json) {
+    return CategoriesResponse(
       success: json['success'] as bool,
       message: json['message'] as String,
-      data: BatchUpdateResult.fromJson(json['data'] as Map<String, dynamic>),
+      data: CategoriesData.fromJson(json['data'] as Map<String, dynamic>),
     );
   }
+
+  /// Convenience getters for backward compatibility
+  List<String> get categories => data.categories;
+  int get count => data.count;
+}
+
+/// Single setting response - uses ApiResponse base class
+typedef SingleSettingResponse = ApiResponse<SystemSetting>;
+
+/// Helper factory for creating SingleSettingResponse from JSON
+/// Usage: final response = createSingleSettingResponse(jsonData);
+SingleSettingResponse createSingleSettingResponse(Map<String, dynamic> json) {
+  return SingleSettingResponse.fromJson(
+    json,
+    (data) => SystemSetting.fromJson(data),
+  );
+}
+
+/// Batch update response - uses ApiResponse base class
+typedef BatchUpdateResponse = ApiResponse<BatchUpdateResult>;
+
+/// Helper factory for creating BatchUpdateResponse from JSON
+/// Usage: final response = createBatchUpdateResponse(jsonData);
+BatchUpdateResponse createBatchUpdateResponse(Map<String, dynamic> json) {
+  return BatchUpdateResponse.fromJson(
+    json,
+    (data) => BatchUpdateResult.fromJson(data),
+  );
 }

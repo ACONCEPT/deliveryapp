@@ -1,11 +1,18 @@
-class Restaurant {
+import 'base/json_parsers.dart';
+import 'base/location_mixin.dart';
+
+class Restaurant with LocationFormatterMixin {
   final int? id;
   final String name;
   final String? description;
   final String? phone;
+  @override
   final String? addressLine1;
+  @override
   final String? addressLine2;
+  @override
   final String? city;
+  @override
   final String? state;
   final String? postalCode;
   final String? country;
@@ -49,23 +56,13 @@ class Restaurant {
       state: json['state'] as String?,
       postalCode: json['postal_code'] as String?,
       country: json['country'] as String?,
-      latitude: json['latitude'] != null
-          ? (json['latitude'] as num).toDouble()
-          : null,
-      longitude: json['longitude'] != null
-          ? (json['longitude'] as num).toDouble()
-          : null,
+      latitude: JsonParsers.parseDouble(json['latitude']),
+      longitude: JsonParsers.parseDouble(json['longitude']),
       isActive: json['is_active'] as bool? ?? true,
-      rating: json['rating'] != null
-          ? (json['rating'] as num).toDouble()
-          : 0.0,
+      rating: JsonParsers.parseDoubleWithDefault(json['rating'], 0.0),
       totalOrders: json['total_orders'] as int? ?? 0,
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
-          : null,
-      updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
-          : null,
+      createdAt: JsonParsers.parseDateTime(json['created_at']),
+      updatedAt: JsonParsers.parseDateTime(json['updated_at']),
     );
   }
 
@@ -89,27 +86,15 @@ class Restaurant {
     };
   }
 
-  // Helper method to get formatted full address string
-  String get fullAddress {
-    final parts = <String>[
-      if (addressLine1 != null && addressLine1!.isNotEmpty) addressLine1!,
-      if (addressLine2 != null && addressLine2!.isNotEmpty) addressLine2!,
-      if (city != null && city!.isNotEmpty) city!,
-      if (state != null && state!.isNotEmpty) state!,
-      if (postalCode != null && postalCode!.isNotEmpty) postalCode!,
-      if (country != null && country!.isNotEmpty) country!,
-    ];
-    return parts.join(', ');
-  }
+  // Implement LocationFormatterMixin getters
+  @override
+  String? get zipCode => postalCode;
 
-  // Helper method to get short address string (city, state only)
-  String get shortAddress {
-    final parts = <String>[
-      if (city != null && city!.isNotEmpty) city!,
-      if (state != null && state!.isNotEmpty) state!,
-    ];
-    return parts.join(', ');
-  }
+  // Helper method to get formatted full address string using mixin
+  String get fullAddress => formatFullAddress();
+
+  // Helper method to get short address string (city, state only) using mixin
+  String get shortAddress => formatLocation();
 
   Restaurant copyWith({
     int? id,

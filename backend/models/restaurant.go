@@ -1,42 +1,34 @@
 package models
 
-import "time"
+import (
+	"delivery_app/backend/models/base"
+)
 
 // Restaurant represents a restaurant entity
 type Restaurant struct {
-	ID                int        `json:"id" db:"id"`
-	Name              string     `json:"name" db:"name"`
-	Description       *string    `json:"description,omitempty" db:"description"`
-	Phone             *string    `json:"phone,omitempty" db:"phone"`
-	AddressLine1      *string    `json:"address_line1,omitempty" db:"address_line1"`
-	AddressLine2      *string    `json:"address_line2,omitempty" db:"address_line2"`
-	City              *string    `json:"city,omitempty" db:"city"`
-	State             *string    `json:"state,omitempty" db:"state"`
-	PostalCode        *string    `json:"postal_code,omitempty" db:"postal_code"`
-	Country           *string    `json:"country,omitempty" db:"country"`
-	Latitude              *float64   `json:"latitude,omitempty" db:"latitude"`
-	Longitude             *float64   `json:"longitude,omitempty" db:"longitude"`
-	HoursOfOperation      *string    `json:"hours_of_operation,omitempty" db:"hours_of_operation"`
-	AveragePrepTimeMin    int        `json:"average_prep_time_minutes" db:"average_prep_time_minutes"`
-	Timezone              string     `json:"timezone" db:"timezone"`
-	IsActive              bool       `json:"is_active" db:"is_active"`
-	Rating            float64    `json:"rating" db:"rating"`
-	TotalOrders       int        `json:"total_orders" db:"total_orders"`
-	ApprovalStatus    string     `json:"approval_status" db:"approval_status"`
-	ApprovedByAdminID *int       `json:"approved_by_admin_id,omitempty" db:"approved_by_admin_id"`
-	ApprovedAt        *time.Time `json:"approved_at,omitempty" db:"approved_at"`
-	RejectionReason   *string    `json:"rejection_reason,omitempty" db:"rejection_reason"`
-	CreatedAt         time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at" db:"updated_at"`
+	base.Timestamps       `db:""` // Embedded timestamps (created_at, updated_at)
+	base.FullAddress      `db:""` // Embedded address fields and geolocation
+	base.ApprovableEntity `db:""` // Embedded approval fields
+
+	ID                 int     `json:"id" db:"id"`
+	Name               string  `json:"name" db:"name"`
+	Description        *string `json:"description,omitempty" db:"description"`
+	Phone              *string `json:"phone,omitempty" db:"phone"`
+	HoursOfOperation   *string `json:"hours_of_operation,omitempty" db:"hours_of_operation"`
+	AveragePrepTimeMin int     `json:"average_prep_time_minutes" db:"average_prep_time_minutes"`
+	Timezone           string  `json:"timezone" db:"timezone"`
+	IsActive           bool    `json:"is_active" db:"is_active"`
+	Rating             float64 `json:"rating" db:"rating"`
+	TotalOrders        int     `json:"total_orders" db:"total_orders"`
 }
 
 // VendorRestaurant represents the ownership relationship between vendors and restaurants
 type VendorRestaurant struct {
-	ID           int       `json:"id" db:"id"`
-	VendorID     int       `json:"vendor_id" db:"vendor_id"`
-	RestaurantID int       `json:"restaurant_id" db:"restaurant_id"`
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+	base.Timestamps `db:""` // Embedded timestamps (created_at, updated_at)
+
+	ID           int `json:"id" db:"id"`
+	VendorID     int `json:"vendor_id" db:"vendor_id"`
+	RestaurantID int `json:"restaurant_id" db:"restaurant_id"`
 }
 
 // RestaurantWithVendor combines restaurant data with vendor information

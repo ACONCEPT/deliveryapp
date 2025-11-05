@@ -3,6 +3,7 @@ package repositories
 import (
 	"database/sql"
 	"delivery_app/backend/models"
+	"delivery_app/backend/models/base"
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
@@ -865,11 +866,13 @@ func (r *userRepository) GetAllUsers(userType, status, search string, limit, off
 		case models.UserTypeCustomer:
 			if customerID.Valid {
 				customer := &models.Customer{
-					ID:        int(customerID.Int64),
-					UserID:    user.ID,
-					FullName:  customerFullName.String,
-					CreatedAt: customerCreatedAt.Time,
-					UpdatedAt: customerUpdatedAt.Time,
+					Timestamps: base.Timestamps{
+						CreatedAt: customerCreatedAt.Time,
+						UpdatedAt: customerUpdatedAt.Time,
+					},
+					ID:       int(customerID.Int64),
+					UserID:   user.ID,
+					FullName: customerFullName.String,
 				}
 				if customerPhone.Valid {
 					customer.Phone = &customerPhone.String
@@ -884,15 +887,19 @@ func (r *userRepository) GetAllUsers(userType, status, search string, limit, off
 		case models.UserTypeVendor:
 			if vendorID.Valid {
 				vendor := &models.Vendor{
-					ID:             int(vendorID.Int64),
-					UserID:         user.ID,
-					BusinessName:   businessName.String,
-					IsActive:       vendorIsActive.Bool,
-					Rating:         vendorRating.Float64,
-					TotalOrders:    int(vendorTotalOrders.Int64),
-					ApprovalStatus: vendorApprovalStatus.String,
-					CreatedAt:      vendorCreatedAt.Time,
-					UpdatedAt:      vendorUpdatedAt.Time,
+					Timestamps: base.Timestamps{
+						CreatedAt: vendorCreatedAt.Time,
+						UpdatedAt: vendorUpdatedAt.Time,
+					},
+					ApprovableEntity: base.ApprovableEntity{
+						ApprovalStatus: base.ApprovalStatus(vendorApprovalStatus.String),
+					},
+					ID:           int(vendorID.Int64),
+					UserID:       user.ID,
+					BusinessName: businessName.String,
+					IsActive:     vendorIsActive.Bool,
+					Rating:       vendorRating.Float64,
+					TotalOrders:  int(vendorTotalOrders.Int64),
 				}
 				if vendorDescription.Valid {
 					vendor.Description = &vendorDescription.String
@@ -940,6 +947,13 @@ func (r *userRepository) GetAllUsers(userType, status, search string, limit, off
 		case models.UserTypeDriver:
 			if driverID.Valid {
 				driver := &models.Driver{
+					Timestamps: base.Timestamps{
+						CreatedAt: driverCreatedAt.Time,
+						UpdatedAt: driverUpdatedAt.Time,
+					},
+					ApprovableEntity: base.ApprovableEntity{
+						ApprovalStatus: base.ApprovalStatus(driverApprovalStatus.String),
+					},
 					ID:              int(driverID.Int64),
 					UserID:          user.ID,
 					FullName:        driverFullName.String,
@@ -947,9 +961,6 @@ func (r *userRepository) GetAllUsers(userType, status, search string, limit, off
 					IsAvailable:     isAvailable.Bool,
 					Rating:          driverRating.Float64,
 					TotalDeliveries: int(totalDeliveries.Int64),
-					ApprovalStatus:  driverApprovalStatus.String,
-					CreatedAt:       driverCreatedAt.Time,
-					UpdatedAt:       driverUpdatedAt.Time,
 				}
 				if vehicleType.Valid {
 					driver.VehicleType = &vehicleType.String
@@ -982,11 +993,13 @@ func (r *userRepository) GetAllUsers(userType, status, search string, limit, off
 		case models.UserTypeAdmin:
 			if adminID.Valid {
 				admin := &models.Admin{
-					ID:        int(adminID.Int64),
-					UserID:    user.ID,
-					FullName:  adminFullName.String,
-					CreatedAt: adminCreatedAt.Time,
-					UpdatedAt: adminUpdatedAt.Time,
+					Timestamps: base.Timestamps{
+						CreatedAt: adminCreatedAt.Time,
+						UpdatedAt: adminUpdatedAt.Time,
+					},
+					ID:       int(adminID.Int64),
+					UserID:   user.ID,
+					FullName: adminFullName.String,
 				}
 				if adminPhone.Valid {
 					admin.Phone = &adminPhone.String

@@ -1,3 +1,5 @@
+import 'base/json_parsers.dart';
+
 class User {
   final int id;
   final String username;
@@ -39,8 +41,8 @@ class User {
         userType: json['user_type'].toString(),
         userRole: (json['user_role'] ?? json['user_type']).toString(), // Fallback to user_type if not provided
         status: json['status'].toString(),
-        createdAt: DateTime.parse(json['created_at'].toString()),
-        updatedAt: DateTime.parse(json['updated_at'].toString()),
+        createdAt: JsonParsers.parseDateTime(json['created_at']) ?? DateTime.now(),
+        updatedAt: JsonParsers.parseDateTime(json['updated_at']) ?? DateTime.now(),
       );
 
       print('[User.fromJson] Successfully parsed user: ${user.username} (${user.userType})');
@@ -67,6 +69,8 @@ class User {
   }
 }
 
+/// Login response with token, user, and profile data.
+/// Structure: { success, message, token?, user?, profile? }
 class LoginResponse {
   final bool success;
   final String message;
@@ -110,6 +114,9 @@ class LoginResponse {
   }
 }
 
+/// Signup response with user ID.
+/// Can be replaced with ApiResponse<int> if needed, but keeping for backward compatibility.
+/// Structure: { success, message, user_id? }
 class SignupResponse {
   final bool success;
   final String message;

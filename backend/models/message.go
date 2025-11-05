@@ -1,16 +1,20 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"delivery_app/backend/models/base"
+)
 
 // Message represents a message between two users
 type Message struct {
-	ID          int       `json:"id" db:"id"`
-	SenderID    int       `json:"sender_id" db:"sender_id"`
-	RecipientID int       `json:"recipient_id" db:"recipient_id"`
-	Content     string    `json:"content" db:"content"`
+	base.Timestamps `db:""` // Embedded timestamps (created_at, updated_at)
+
+	ID          int        `json:"id" db:"id"`
+	SenderID    int        `json:"sender_id" db:"sender_id"`
+	RecipientID int        `json:"recipient_id" db:"recipient_id"`
+	Content     string     `json:"content" db:"content"`
 	ReadAt      *time.Time `json:"read_at,omitempty" db:"read_at"`
-	CreatedAt   time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // MessageWithUserInfo represents a message with sender/recipient details

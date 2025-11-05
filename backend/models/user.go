@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"delivery_app/backend/models/base"
+)
 
 // UserType represents the type of user in the system
 type UserType string
@@ -23,6 +27,8 @@ const (
 
 // User represents the main user entity
 type User struct {
+	base.Timestamps `db:""` // Embedded timestamps (created_at, updated_at)
+
 	ID           int        `json:"id" db:"id"`
 	Username     string     `json:"username" db:"username"`
 	Email        string     `json:"email" db:"email"`
@@ -30,79 +36,64 @@ type User struct {
 	UserType     UserType   `json:"user_type" db:"user_type"`
 	UserRole     string     `json:"user_role" db:"user_role"`
 	Status       UserStatus `json:"status" db:"status"`
-	CreatedAt    time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at" db:"updated_at"`
 }
 
 // Customer represents a customer profile
 type Customer struct {
-	ID               int       `json:"id" db:"id"`
-	UserID           int       `json:"user_id" db:"user_id"`
-	FullName         string    `json:"full_name" db:"full_name"`
-	Phone            *string   `json:"phone,omitempty" db:"phone"`
-	DefaultAddressID *int      `json:"default_address_id,omitempty" db:"default_address_id"`
-	CreatedAt        time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at" db:"updated_at"`
+	base.Timestamps `db:""` // Embedded timestamps (created_at, updated_at)
+
+	ID               int     `json:"id" db:"id"`
+	UserID           int     `json:"user_id" db:"user_id"`
+	FullName         string  `json:"full_name" db:"full_name"`
+	Phone            *string `json:"phone,omitempty" db:"phone"`
+	DefaultAddressID *int    `json:"default_address_id,omitempty" db:"default_address_id"`
 }
 
 // Vendor represents a vendor/restaurant profile
 type Vendor struct {
-	ID                int        `json:"id" db:"id"`
-	UserID            int        `json:"user_id" db:"user_id"`
-	BusinessName      string     `json:"business_name" db:"business_name"`
-	Description       *string    `json:"description,omitempty" db:"description"`
-	Phone             *string    `json:"phone,omitempty" db:"phone"`
-	AddressLine1      *string    `json:"address_line1,omitempty" db:"address_line1"`
-	AddressLine2      *string    `json:"address_line2,omitempty" db:"address_line2"`
-	City              *string    `json:"city,omitempty" db:"city"`
-	State             *string    `json:"state,omitempty" db:"state"`
-	PostalCode        *string    `json:"postal_code,omitempty" db:"postal_code"`
-	Country           *string    `json:"country,omitempty" db:"country"`
-	Latitude          *float64   `json:"latitude,omitempty" db:"latitude"`
-	Longitude         *float64   `json:"longitude,omitempty" db:"longitude"`
-	IsActive          bool       `json:"is_active" db:"is_active"`
-	Rating            float64    `json:"rating" db:"rating"`
-	TotalOrders       int        `json:"total_orders" db:"total_orders"`
-	ApprovalStatus    string     `json:"approval_status" db:"approval_status"`
-	ApprovedByAdminID *int       `json:"approved_by_admin_id,omitempty" db:"approved_by_admin_id"`
-	ApprovedAt        *time.Time `json:"approved_at,omitempty" db:"approved_at"`
-	RejectionReason   *string    `json:"rejection_reason,omitempty" db:"rejection_reason"`
-	CreatedAt         time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at" db:"updated_at"`
+	base.Timestamps       `db:""` // Embedded timestamps (created_at, updated_at)
+	base.FullAddress      `db:""` // Embedded address fields and geolocation
+	base.ApprovableEntity `db:""` // Embedded approval fields
+
+	ID           int     `json:"id" db:"id"`
+	UserID       int     `json:"user_id" db:"user_id"`
+	BusinessName string  `json:"business_name" db:"business_name"`
+	Description  *string `json:"description,omitempty" db:"description"`
+	Phone        *string `json:"phone,omitempty" db:"phone"`
+	IsActive     bool    `json:"is_active" db:"is_active"`
+	Rating       float64 `json:"rating" db:"rating"`
+	TotalOrders  int     `json:"total_orders" db:"total_orders"`
 }
 
 // Driver represents a delivery driver profile
 type Driver struct {
-	ID                int        `json:"id" db:"id"`
-	UserID            int        `json:"user_id" db:"user_id"`
-	FullName          string     `json:"full_name" db:"full_name"`
-	Phone             string     `json:"phone" db:"phone"`
-	VehicleType       *string    `json:"vehicle_type,omitempty" db:"vehicle_type"`
-	VehiclePlate      *string    `json:"vehicle_plate,omitempty" db:"vehicle_plate"`
-	LicenseNumber     *string    `json:"license_number,omitempty" db:"license_number"`
-	IsAvailable       bool       `json:"is_available" db:"is_available"`
-	CurrentLatitude   *float64   `json:"current_latitude,omitempty" db:"current_latitude"`
-	CurrentLongitude  *float64   `json:"current_longitude,omitempty" db:"current_longitude"`
-	Rating            float64    `json:"rating" db:"rating"`
-	TotalDeliveries   int        `json:"total_deliveries" db:"total_deliveries"`
-	ApprovalStatus    string     `json:"approval_status" db:"approval_status"`
-	ApprovedByAdminID *int       `json:"approved_by_admin_id,omitempty" db:"approved_by_admin_id"`
-	ApprovedAt        *time.Time `json:"approved_at,omitempty" db:"approved_at"`
-	RejectionReason   *string    `json:"rejection_reason,omitempty" db:"rejection_reason"`
-	CreatedAt         time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at" db:"updated_at"`
+	base.Timestamps       `db:""` // Embedded timestamps (created_at, updated_at)
+	base.ApprovableEntity `db:""` // Embedded approval fields
+
+	ID               int      `json:"id" db:"id"`
+	UserID           int      `json:"user_id" db:"user_id"`
+	FullName         string   `json:"full_name" db:"full_name"`
+	Phone            string   `json:"phone" db:"phone"`
+	VehicleType      *string  `json:"vehicle_type,omitempty" db:"vehicle_type"`
+	VehiclePlate     *string  `json:"vehicle_plate,omitempty" db:"vehicle_plate"`
+	LicenseNumber    *string  `json:"license_number,omitempty" db:"license_number"`
+	IsAvailable      bool     `json:"is_available" db:"is_available"`
+	CurrentLatitude  *float64 `json:"current_latitude,omitempty" db:"current_latitude"`
+	CurrentLongitude *float64 `json:"current_longitude,omitempty" db:"current_longitude"`
+	Rating           float64  `json:"rating" db:"rating"`
+	TotalDeliveries  int      `json:"total_deliveries" db:"total_deliveries"`
 }
 
 // Admin represents an admin profile
 type Admin struct {
-	ID          int       `json:"id" db:"id"`
-	UserID      int       `json:"user_id" db:"user_id"`
-	FullName    string    `json:"full_name" db:"full_name"`
-	Phone       *string   `json:"phone,omitempty" db:"phone"`
-	Role        *string   `json:"role,omitempty" db:"role"`
-	Permissions *string   `json:"permissions,omitempty" db:"permissions"` // JSONB stored as string
-	CreatedAt   time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+	base.Timestamps `db:""` // Embedded timestamps (created_at, updated_at)
+
+	ID          int     `json:"id" db:"id"`
+	UserID      int     `json:"user_id" db:"user_id"`
+	FullName    string  `json:"full_name" db:"full_name"`
+	Phone       *string `json:"phone,omitempty" db:"phone"`
+	Role        *string `json:"role,omitempty" db:"role"`
+	Permissions *string `json:"permissions,omitempty" db:"permissions"` // JSONB stored as string
 }
 
 // LoginRequest represents the login request payload
@@ -154,21 +145,22 @@ type ErrorResponse struct {
 }
 
 // CustomerAddress represents a customer's delivery address
+// Note: Cannot use base.FullAddress because address_line1, city, and country are NOT NULL
 type CustomerAddress struct {
-	ID           int       `json:"id" db:"id"`
-	CustomerID   int       `json:"customer_id" db:"customer_id"`
-	AddressLine1 string    `json:"address_line1" db:"address_line1"`
-	AddressLine2 *string   `json:"address_line2,omitempty" db:"address_line2"`
-	City         string    `json:"city" db:"city"`
-	State        *string   `json:"state,omitempty" db:"state"`
-	PostalCode   *string   `json:"postal_code,omitempty" db:"postal_code"`
-	Country      string    `json:"country" db:"country"`
-	Latitude     *float64  `json:"latitude,omitempty" db:"latitude"`
-	Longitude    *float64  `json:"longitude,omitempty" db:"longitude"`
-	Timezone     *string   `json:"timezone,omitempty" db:"timezone"`
-	IsDefault    bool      `json:"is_default" db:"is_default"`
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+	base.Timestamps `db:""` // Embedded timestamps (created_at, updated_at)
+
+	ID           int      `json:"id" db:"id"`
+	CustomerID   int      `json:"customer_id" db:"customer_id"`
+	AddressLine1 string   `json:"address_line1" db:"address_line1"`
+	AddressLine2 *string  `json:"address_line2,omitempty" db:"address_line2"`
+	City         string   `json:"city" db:"city"`
+	State        *string  `json:"state,omitempty" db:"state"`
+	PostalCode   *string  `json:"postal_code,omitempty" db:"postal_code"`
+	Country      string   `json:"country" db:"country"`
+	Latitude     *float64 `json:"latitude,omitempty" db:"latitude"`
+	Longitude    *float64 `json:"longitude,omitempty" db:"longitude"`
+	Timezone     *string  `json:"timezone,omitempty" db:"timezone"`
+	IsDefault    bool     `json:"is_default" db:"is_default"`
 }
 
 // CreateAddressRequest represents the request to create a customer address

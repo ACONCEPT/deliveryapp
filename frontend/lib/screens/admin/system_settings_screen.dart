@@ -98,13 +98,18 @@ class _SystemSettingsScreenState extends State<SystemSettingsScreen> {
         _pendingChanges,
       );
 
-      if (response.data.allSucceeded) {
+      final result = response.data;
+      if (result == null) {
+        throw Exception('No data in batch update response');
+      }
+
+      if (result.allSucceeded) {
         // All succeeded
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '✅ Successfully updated ${response.data.successCount} settings',
+                '✅ Successfully updated ${result.successCount} settings',
               ),
               backgroundColor: Colors.green,
             ),
@@ -121,13 +126,13 @@ class _SystemSettingsScreenState extends State<SystemSettingsScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '⚠️  ${response.data.successCount} succeeded, ${response.data.failureCount} failed',
+                '⚠️  ${result.successCount} succeeded, ${result.failureCount} failed',
               ),
               backgroundColor: Colors.orange,
               duration: const Duration(seconds: 5),
               action: SnackBarAction(
                 label: 'View Errors',
-                onPressed: () => _showErrorDialog(response.data.errors),
+                onPressed: () => _showErrorDialog(result.errors),
               ),
             ),
           );
@@ -135,7 +140,7 @@ class _SystemSettingsScreenState extends State<SystemSettingsScreen> {
         setState(() {
           _isSaving = false;
           // Remove successfully updated keys from pending
-          for (final key in response.data.updatedKeys) {
+          for (final key in result.updatedKeys) {
             _pendingChanges.remove(key);
           }
         });

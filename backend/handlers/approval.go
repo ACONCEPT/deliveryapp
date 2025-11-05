@@ -3,6 +3,7 @@ package handlers
 import (
 	"delivery_app/backend/middleware"
 	"delivery_app/backend/models"
+	"delivery_app/backend/models/base"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -72,7 +73,7 @@ func (h *Handler) ApproveVendor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if already approved
-	if vendor.ApprovalStatus == string(models.ApprovalStatusApproved) {
+	if vendor.ApprovalStatus == base.ApprovalStatusApproved {
 		sendError(w, http.StatusBadRequest, "Vendor is already approved")
 		return
 	}
@@ -89,7 +90,7 @@ func (h *Handler) ApproveVendor(w http.ResponseWriter, r *http.Request) {
 		EntityType: "vendor",
 		EntityID:   vendorID,
 		AdminID:    adminProfile.ID,
-		Action:     models.ApprovalStatusApproved,
+		Action:     base.ApprovalStatusApproved,
 		Reason:     nil,
 	}
 	err = h.App.Deps.Approvals.CreateApprovalHistory(history)
@@ -143,7 +144,7 @@ func (h *Handler) RejectVendor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if already rejected
-	if vendor.ApprovalStatus == string(models.ApprovalStatusRejected) {
+	if vendor.ApprovalStatus == base.ApprovalStatusRejected {
 		sendError(w, http.StatusBadRequest, "Vendor is already rejected")
 		return
 	}
@@ -160,7 +161,7 @@ func (h *Handler) RejectVendor(w http.ResponseWriter, r *http.Request) {
 		EntityType: "vendor",
 		EntityID:   vendorID,
 		AdminID:    adminProfile.ID,
-		Action:     models.ApprovalStatusRejected,
+		Action:     base.ApprovalStatusRejected,
 		Reason:     req.Reason,
 	}
 	err = h.App.Deps.Approvals.CreateApprovalHistory(history)
@@ -201,7 +202,7 @@ func (h *Handler) ApproveRestaurant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if already approved
-	if restaurant.ApprovalStatus == string(models.ApprovalStatusApproved) {
+	if restaurant.ApprovalStatus == base.ApprovalStatusApproved {
 		sendError(w, http.StatusBadRequest, "Restaurant is already approved")
 		return
 	}
@@ -218,7 +219,7 @@ func (h *Handler) ApproveRestaurant(w http.ResponseWriter, r *http.Request) {
 		EntityType: "restaurant",
 		EntityID:   restaurantID,
 		AdminID:    adminProfile.ID,
-		Action:     models.ApprovalStatusApproved,
+		Action:     base.ApprovalStatusApproved,
 		Reason:     nil,
 	}
 	err = h.App.Deps.Approvals.CreateApprovalHistory(history)
@@ -272,7 +273,7 @@ func (h *Handler) RejectRestaurant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if already rejected
-	if restaurant.ApprovalStatus == string(models.ApprovalStatusRejected) {
+	if restaurant.ApprovalStatus == base.ApprovalStatusRejected {
 		sendError(w, http.StatusBadRequest, "Restaurant is already rejected")
 		return
 	}
@@ -289,7 +290,7 @@ func (h *Handler) RejectRestaurant(w http.ResponseWriter, r *http.Request) {
 		EntityType: "restaurant",
 		EntityID:   restaurantID,
 		AdminID:    adminProfile.ID,
-		Action:     models.ApprovalStatusRejected,
+		Action:     base.ApprovalStatusRejected,
 		Reason:     req.Reason,
 	}
 	err = h.App.Deps.Approvals.CreateApprovalHistory(history)
@@ -349,10 +350,10 @@ func (h *Handler) GetVendorApprovalStatus(w http.ResponseWriter, r *http.Request
 	// Create response
 	response := models.VendorApprovalStatusResponse{
 		VendorID:             vendor.ID,
-		ApprovalStatus:       models.ApprovalStatus(vendor.ApprovalStatus),
+		ApprovalStatus:       base.ApprovalStatus(vendor.ApprovalStatus),
 		RejectionReason:      vendor.RejectionReason,
 		ApprovedAt:           vendor.ApprovedAt,
-		CanCreateRestaurants: vendor.ApprovalStatus == string(models.ApprovalStatusApproved),
+		CanCreateRestaurants: vendor.ApprovalStatus == base.ApprovalStatusApproved ,
 	}
 
 	sendSuccess(w, http.StatusOK, "Vendor approval status retrieved successfully", response)
@@ -398,7 +399,7 @@ func (h *Handler) ApproveDriver(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if already approved
-	if driver.ApprovalStatus == string(models.ApprovalStatusApproved) {
+	if driver.ApprovalStatus == base.ApprovalStatusApproved {
 		sendError(w, http.StatusBadRequest, "Driver is already approved")
 		return
 	}
@@ -415,7 +416,7 @@ func (h *Handler) ApproveDriver(w http.ResponseWriter, r *http.Request) {
 		EntityType: "driver",
 		EntityID:   driverID,
 		AdminID:    adminProfile.ID,
-		Action:     models.ApprovalStatusApproved,
+		Action:     base.ApprovalStatusApproved,
 		Reason:     nil,
 	}
 	err = h.App.Deps.Approvals.CreateApprovalHistory(history)
@@ -469,7 +470,7 @@ func (h *Handler) RejectDriver(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if already rejected
-	if driver.ApprovalStatus == string(models.ApprovalStatusRejected) {
+	if driver.ApprovalStatus == base.ApprovalStatusRejected {
 		sendError(w, http.StatusBadRequest, "Driver is already rejected")
 		return
 	}
@@ -486,7 +487,7 @@ func (h *Handler) RejectDriver(w http.ResponseWriter, r *http.Request) {
 		EntityType: "driver",
 		EntityID:   driverID,
 		AdminID:    adminProfile.ID,
-		Action:     models.ApprovalStatusRejected,
+		Action:     base.ApprovalStatusRejected,
 		Reason:     req.Reason,
 	}
 	err = h.App.Deps.Approvals.CreateApprovalHistory(history)
@@ -513,10 +514,10 @@ func (h *Handler) GetDriverApprovalStatus(w http.ResponseWriter, r *http.Request
 	// Create response
 	response := models.DriverApprovalStatusResponse{
 		DriverID:        driver.ID,
-		ApprovalStatus:  models.ApprovalStatus(driver.ApprovalStatus),
+		ApprovalStatus:  driver.ApprovalStatus,
 		RejectionReason: driver.RejectionReason,
 		ApprovedAt:      driver.ApprovedAt,
-		CanAcceptOrders: driver.ApprovalStatus == string(models.ApprovalStatusApproved),
+		CanAcceptOrders: driver.ApprovalStatus == base.ApprovalStatusApproved ,
 	}
 
 	sendSuccess(w, http.StatusOK, "Driver approval status retrieved successfully", response)

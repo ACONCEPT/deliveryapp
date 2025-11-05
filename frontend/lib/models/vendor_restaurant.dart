@@ -1,3 +1,5 @@
+import 'base/json_parsers.dart';
+
 class VendorRestaurant {
   final int? id;
   final int vendorId;
@@ -18,12 +20,8 @@ class VendorRestaurant {
       id: json['id'] as int?,
       vendorId: json['vendor_id'] as int,
       restaurantId: json['restaurant_id'] as int,
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
-          : null,
-      updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
-          : null,
+      createdAt: JsonParsers.parseDateTime(json['created_at']),
+      updatedAt: JsonParsers.parseDateTime(json['updated_at']),
     );
   }
 

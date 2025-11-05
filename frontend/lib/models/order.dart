@@ -1,3 +1,6 @@
+import 'base/enum_helpers.dart';
+import 'base/json_parsers.dart';
+
 /// Order and OrderItem models for order management
 /// Supports order creation, status tracking, and full order lifecycle
 
@@ -36,9 +39,10 @@ enum OrderStatus {
 
   /// Convert string to OrderStatus enum
   static OrderStatus fromString(String status) {
-    return OrderStatus.values.firstWhere(
-      (e) => e.toString().split('.').last.toLowerCase() == status.toLowerCase(),
-      orElse: () => OrderStatus.pending,
+    return EnumHelpers.enumFromString(
+      OrderStatus.values,
+      status,
+      defaultValue: OrderStatus.pending,
     );
   }
 }
@@ -71,93 +75,27 @@ class OrderItem {
 
   /// Create OrderItem from JSON (response from backend)
   factory OrderItem.fromJson(Map<String, dynamic> json) {
-    // Helper function to extract ID from either int or nested object (including Go's sql.NullInt64)
-    int? _extractId(dynamic value) {
-      if (value == null) return null;
-      if (value is int) return value;
-      // Handle Go's sql.NullInt64: {"Int64": 1, "Valid": true}
-      if (value is Map<String, dynamic>) {
-        if (value.containsKey('Int64') && value['Valid'] == true) {
-          return value['Int64'] as int?;
-        }
-        if (value.containsKey('id')) {
-          return value['id'] as int?;
-        }
-      }
-      return null;
-    }
-
-    // Helper function to extract String from either String or nested object (including Go's sql.NullString)
-    String? _extractString(dynamic value, String key) {
-      if (value == null) return null;
-      if (value is String) return value;
-      // Handle Go's sql.NullString: {"String": "value", "Valid": true}
-      if (value is Map<String, dynamic>) {
-        if (value.containsKey('String') && value['Valid'] == true) {
-          final str = value['String'];
-          return (str is String && str.isNotEmpty) ? str : null;
-        }
-        if (value.containsKey(key)) {
-          final extracted = value[key];
-          return extracted is String ? extracted : null;
-        }
-      }
-      return null;
-    }
-
-    // Helper to extract DateTime from either String or Go's sql.NullTime
-    DateTime? _extractDateTime(dynamic value) {
-      if (value == null) return null;
-      if (value is String) {
-        try {
-          return DateTime.parse(value);
-        } catch (e) {
-          return null;
-        }
-      }
-      // Handle Go's sql.NullTime: {"Time": "2025-...", "Valid": true}
-      if (value is Map<String, dynamic>) {
-        if (value.containsKey('Time') && value['Valid'] == true) {
-          final timeStr = value['Time'];
-          if (timeStr is String) {
-            try {
-              final dt = DateTime.parse(timeStr);
-              // Check if it's not the zero time (0001-01-01)
-              if (dt.year > 1) {
-                return dt;
-              }
-            } catch (e) {
-              return null;
-            }
-          }
-        }
-      }
-      return null;
-    }
-
     return OrderItem(
       id: json['id'] as int?,
-      orderId: _extractId(json['order_id']),
+      orderId: JsonParsers.extractId(json['order_id']),
       // Handle menu_item_name which might be String or nested menuItem object with 'name' field
-      menuItemName: _extractString(json['menu_item_name'], 'name') ??
-                    _extractString(json['menuItem'], 'name') ??
-                    _extractString(json['menu_item'], 'name') ?? '',
+      menuItemName: JsonParsers.extractString(json['menu_item_name'], 'name') ??
+                    JsonParsers.extractString(json['menuItem'], 'name') ??
+                    JsonParsers.extractString(json['menu_item'], 'name') ?? '',
       // Handle menu_item_description which might be String or nested menuItem object with 'description' field
-      menuItemDescription: _extractString(json['menu_item_description'], 'description') ??
-                          _extractString(json['menuItem'], 'description') ??
-                          _extractString(json['menu_item'], 'description'),
+      menuItemDescription: JsonParsers.extractString(json['menu_item_description'], 'description') ??
+                          JsonParsers.extractString(json['menuItem'], 'description') ??
+                          JsonParsers.extractString(json['menu_item'], 'description'),
       quantity: json['quantity'] as int? ?? 1,
-      basePrice: (json['price_at_time'] as num?)?.toDouble() ?? 0.0,
-      totalPrice: (json['line_total'] as num?)?.toDouble() ?? 0.0,
+      basePrice: JsonParsers.parseDouble(json['price_at_time']) ?? 0.0,
+      totalPrice: JsonParsers.parseDouble(json['line_total']) ?? 0.0,
       customizations: json['customizations'] != null
           ? (json['customizations'] is Map
               ? Map<String, dynamic>.from(json['customizations'] as Map)
               : null)
           : null,
       specialInstructions: null, // Backend doesn't store per-item special instructions
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
-          : null,
+      createdAt: JsonParsers.parseDateTime(json['created_at']),
     );
   }
 
@@ -243,42 +181,8 @@ class Order {
 
   /// Create Order from JSON
   factory Order.fromJson(Map<String, dynamic> json) {
-    // Helper function to extract ID from either int or nested object (including Go's sql.NullInt64)
-    int? _extractId(dynamic value) {
-      if (value == null) return null;
-      if (value is int) return value;
-      // Handle Go's sql.NullInt64: {"Int64": 1, "Valid": true}
-      if (value is Map<String, dynamic>) {
-        if (value.containsKey('Int64') && value['Valid'] == true) {
-          return value['Int64'] as int?;
-        }
-        if (value.containsKey('id')) {
-          return value['id'] as int?;
-        }
-      }
-      return null;
-    }
-
-    // Helper function to extract String from either String or nested object (including Go's sql.NullString)
-    String? _extractString(dynamic value, String key) {
-      if (value == null) return null;
-      if (value is String) return value;
-      // Handle Go's sql.NullString: {"String": "value", "Valid": true}
-      if (value is Map<String, dynamic>) {
-        if (value.containsKey('String') && value['Valid'] == true) {
-          final str = value['String'];
-          return (str is String && str.isNotEmpty) ? str : null;
-        }
-        if (value.containsKey(key)) {
-          final extracted = value[key];
-          return extracted is String ? extracted : null;
-        }
-      }
-      return null;
-    }
-
     // Helper to safely extract status as String
-    String? _extractStatus(dynamic value) {
+    String? extractStatus(dynamic value) {
       if (value == null) return null;
       if (value is String) return value;
       if (value is Map<String, dynamic> && value.containsKey('status')) {
@@ -287,65 +191,35 @@ class Order {
       return null;
     }
 
-    // Helper to extract DateTime from either String or Go's sql.NullTime
-    DateTime? _extractDateTime(dynamic value) {
-      if (value == null) return null;
-      if (value is String) {
-        try {
-          return DateTime.parse(value);
-        } catch (e) {
-          return null;
-        }
-      }
-      // Handle Go's sql.NullTime: {"Time": "2025-...", "Valid": true}
-      if (value is Map<String, dynamic>) {
-        if (value.containsKey('Time') && value['Valid'] == true) {
-          final timeStr = value['Time'];
-          if (timeStr is String) {
-            try {
-              final dt = DateTime.parse(timeStr);
-              // Check if it's not the zero time (0001-01-01)
-              if (dt.year > 1) {
-                return dt;
-              }
-            } catch (e) {
-              return null;
-            }
-          }
-        }
-      }
-      return null;
-    }
-
     return Order(
       id: json['id'] as int?,
       // Handle customer_id which might be int or nested customer object
-      customerId: _extractId(json['customer_id']) ?? 0,
+      customerId: JsonParsers.extractId(json['customer_id']) ?? 0,
       // Handle restaurant_id which might be int or nested restaurant object
-      restaurantId: _extractId(json['restaurant_id']) ?? 0,
+      restaurantId: JsonParsers.extractId(json['restaurant_id']) ?? 0,
       // Handle restaurant_name which might be String or nested restaurant object with 'name' field
-      restaurantName: _extractString(json['restaurant_name'], 'name') ??
-                      _extractString(json['restaurant'], 'name'),
+      restaurantName: JsonParsers.extractString(json['restaurant_name'], 'name') ??
+                      JsonParsers.extractString(json['restaurant'], 'name'),
       // Handle delivery_address_id which might be int or nested address object
-      deliveryAddressId: _extractId(json['delivery_address_id']),
+      deliveryAddressId: JsonParsers.extractId(json['delivery_address_id']),
       // Handle status which might be String or nested object
-      status: OrderStatus.fromString(_extractStatus(json['status']) ?? 'pending'),
+      status: OrderStatus.fromString(extractStatus(json['status']) ?? 'pending'),
       // Add null safety for numeric fields with fallbacks
-      subtotal: (json['subtotal_amount'] as num?)?.toDouble() ??
-                (json['subtotal'] as num?)?.toDouble() ?? 0.0,
-      taxAmount: (json['tax_amount'] as num?)?.toDouble() ?? 0.0,
-      deliveryFee: (json['delivery_fee'] as num?)?.toDouble() ?? 0.0,
-      totalAmount: (json['total_amount'] as num?)?.toDouble() ?? 0.0,
-      items: json['items'] != null
-          ? (json['items'] as List)
-              .map((item) => OrderItem.fromJson(item as Map<String, dynamic>))
-              .toList()
-          : [],
-      specialInstructions: _extractString(json['special_instructions'], 'text'),
-      cancellationReason: _extractString(json['cancellation_reason'], 'text'),
-      createdAt: _extractDateTime(json['created_at']),
-      updatedAt: _extractDateTime(json['updated_at']),
-      estimatedDeliveryTime: _extractDateTime(json['estimated_delivery_time']),
+      subtotal: JsonParsers.parseDouble(json['subtotal_amount']) ??
+                JsonParsers.parseDouble(json['subtotal']) ?? 0.0,
+      taxAmount: JsonParsers.parseDouble(json['tax_amount']) ?? 0.0,
+      deliveryFee: JsonParsers.parseDouble(json['delivery_fee']) ?? 0.0,
+      totalAmount: JsonParsers.parseDouble(json['total_amount']) ?? 0.0,
+      items: JsonParsers.parseList(
+        json,
+        'items',
+        (item) => OrderItem.fromJson(item),
+      ),
+      specialInstructions: JsonParsers.extractString(json['special_instructions'], 'text'),
+      cancellationReason: JsonParsers.extractString(json['cancellation_reason'], 'text'),
+      createdAt: JsonParsers.parseDateTimeWithNullable(json['created_at']),
+      updatedAt: JsonParsers.parseDateTimeWithNullable(json['updated_at']),
+      estimatedDeliveryTime: JsonParsers.parseDateTimeWithNullable(json['estimated_delivery_time']),
     );
   }
 

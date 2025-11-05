@@ -7,8 +7,10 @@
 /// Each template represents a single customization (e.g., "Extra Cheese", "Spice Level")
 /// with a flat list of options (e.g., ["Yes", "No"] or ["Mild", "Medium", "Hot"]).
 /// No nested groups - just one title and one set of options.
+library;
 
-import 'dart:convert';
+import 'base/json_parsers.dart';
+import 'base/api_response.dart';
 
 /// Simple Customization Option
 ///
@@ -90,22 +92,8 @@ class CustomizationTemplate {
   bool get isVendorSpecific => vendorId != null;
 
   factory CustomizationTemplate.fromJson(Map<String, dynamic> json) {
-    // Parse customization_config - backend sends it as a JSON string
-    Map<String, dynamic> config = {};
-    final configValue = json['customization_config'];
-    if (configValue != null) {
-      if (configValue is String) {
-        // Backend sends JSON as string, need to decode it
-        try {
-          config = jsonDecode(configValue) as Map<String, dynamic>;
-        } catch (e) {
-          config = {};
-        }
-      } else if (configValue is Map<String, dynamic>) {
-        // Already a map (shouldn't happen with current backend)
-        config = configValue;
-      }
-    }
+    // Parse customization_config using JsonParsers utility
+    final config = JsonParsers.parseJsonField(json['customization_config']);
 
     // Parse simplified structure from config
     List<SimpleCustomizationOption> options = [];
@@ -160,12 +148,8 @@ class CustomizationTemplate {
       customizationConfig: config,
       vendorId: json['vendor_id'] as int?,
       isActive: json['is_active'] as bool? ?? true,
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
-          : null,
-      updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
-          : null,
+      createdAt: JsonParsers.parseDateTime(json['created_at']),
+      updatedAt: JsonParsers.parseDateTime(json['updated_at']),
     );
   }
 
@@ -185,7 +169,7 @@ class CustomizationTemplate {
       'name': name,
       if (description != null) 'description': description,
       // Backend expects customization_config as a JSON-encoded string
-      'customization_config': jsonEncode(config),
+      'customization_config': JsonParsers.encodeJsonField(config),
       if (vendorId != null) 'vendor_id': vendorId,
       'is_active': isActive,
       if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
@@ -288,7 +272,7 @@ class CreateCustomizationTemplateRequest {
       'name': name,
       if (description != null) 'description': description,
       // Backend expects customization_config as a JSON-encoded string
-      'customization_config': jsonEncode(config),
+      'customization_config': JsonParsers.encodeJsonField(config),
       'is_active': isActive,
     };
   }
@@ -334,7 +318,7 @@ class UpdateCustomizationTemplateRequest {
       if (maxSelections != null) config['max_selections'] = maxSelections;
       if (maxLength != null) config['max_length'] = maxLength;
       if (placeholder != null) config['placeholder'] = placeholder;
-      json['customization_config'] = jsonEncode(config);
+      json['customization_config'] = JsonParsers.encodeJsonField(config);
     }
 
     if (isActive != null) json['is_active'] = isActive;
@@ -353,27 +337,21 @@ class UpdateCustomizationTemplateRequest {
     isActive == null;
 }
 
-/// Response from GET /api/vendor/customization-templates or /api/admin/customization-templates
-class CustomizationTemplatesResponse {
-  final bool success;
-  final List<CustomizationTemplate> templates;
+/// Type alias for create template response
+typedef CreateTemplateResponse = ApiResponse<CustomizationTemplate>;
 
-  CustomizationTemplatesResponse({
-    required this.success,
-    required this.templates,
-  });
+/// Type alias for update template response
+typedef UpdateTemplateResponse = ApiResponse<CustomizationTemplate>;
 
-  factory CustomizationTemplatesResponse.fromJson(Map<String, dynamic> json) {
-    return CustomizationTemplatesResponse(
-      success: json['success'] as bool,
-      templates: (json['data'] as List)
-          .map((t) => CustomizationTemplate.fromJson(t as Map<String, dynamic>))
-          .toList(),
-    );
-  }
-}
+/// Type alias for delete template response
+typedef DeleteTemplateResponse = SimpleResponse;
 
-/// Response from POST /PUT /DELETE operations
+/// Type alias for list templates response
+typedef ListTemplatesResponse = ApiListResponse<CustomizationTemplate>;
+
+/// Legacy response class for backward compatibility
+/// Deprecated: Use CreateTemplateResponse or UpdateTemplateResponse instead
+@Deprecated('Use ApiResponse<CustomizationTemplate> instead')
 class CustomizationTemplateResponse {
   final bool success;
   final String message;
@@ -392,6 +370,28 @@ class CustomizationTemplateResponse {
       template: json['data'] != null
           ? CustomizationTemplate.fromJson(json['data'] as Map<String, dynamic>)
           : null,
+    );
+  }
+}
+
+/// Legacy response class for backward compatibility
+/// Deprecated: Use ListTemplatesResponse instead
+@Deprecated('Use ApiListResponse<CustomizationTemplate> instead')
+class CustomizationTemplatesResponse {
+  final bool success;
+  final List<CustomizationTemplate> templates;
+
+  CustomizationTemplatesResponse({
+    required this.success,
+    required this.templates,
+  });
+
+  factory CustomizationTemplatesResponse.fromJson(Map<String, dynamic> json) {
+    return CustomizationTemplatesResponse(
+      success: json['success'] as bool,
+      templates: (json['data'] as List)
+          .map((t) => CustomizationTemplate.fromJson(t as Map<String, dynamic>))
+          .toList(),
     );
   }
 }

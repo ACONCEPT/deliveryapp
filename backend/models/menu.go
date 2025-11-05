@@ -1,28 +1,30 @@
 package models
 
-import "time"
+import (
+	"delivery_app/backend/models/base"
+)
 
 // Menu represents a menu template
 type Menu struct {
-	ID          int       `json:"id" db:"id"`
-	Name        string    `json:"name" db:"name"`
-	Description *string   `json:"description,omitempty" db:"description"`
-	MenuConfig  string    `json:"menu_config" db:"menu_config"` // JSONB as string
-	VendorID    *int      `json:"vendor_id,omitempty" db:"vendor_id"` // Vendor who owns this menu
-	IsActive    bool      `json:"is_active" db:"is_active"`
-	CreatedAt   time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+	base.Timestamps `db:""` // Embedded timestamps (created_at, updated_at)
+
+	ID          int     `json:"id" db:"id"`
+	Name        string  `json:"name" db:"name"`
+	Description *string `json:"description,omitempty" db:"description"`
+	MenuConfig  string  `json:"menu_config" db:"menu_config"` // JSONB as string
+	VendorID    *int    `json:"vendor_id,omitempty" db:"vendor_id"` // Vendor who owns this menu
+	IsActive    bool    `json:"is_active" db:"is_active"`
 }
 
 // RestaurantMenu represents a menu assignment to a restaurant
 type RestaurantMenu struct {
-	ID           int       `json:"id" db:"id"`
-	RestaurantID int       `json:"restaurant_id" db:"restaurant_id"`
-	MenuID       int       `json:"menu_id" db:"menu_id"`
-	IsActive     bool      `json:"is_active" db:"is_active"`
-	DisplayOrder int       `json:"display_order" db:"display_order"`
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+	base.Timestamps `db:""` // Embedded timestamps (created_at, updated_at)
+
+	ID           int  `json:"id" db:"id"`
+	RestaurantID int  `json:"restaurant_id" db:"restaurant_id"`
+	MenuID       int  `json:"menu_id" db:"menu_id"`
+	IsActive     bool `json:"is_active" db:"is_active"`
+	DisplayOrder int  `json:"display_order" db:"display_order"`
 }
 
 // CreateMenuRequest for creating a new menu

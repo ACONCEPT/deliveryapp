@@ -115,10 +115,10 @@ class SystemSettingsService extends BaseService {
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body) as Map<String, dynamic>;
-        final settingResponse = SingleSettingResponse.fromJson(responseData);
+        final settingResponse = createSingleSettingResponse(responseData);
 
         developer.log(
-          '✅ Successfully fetched setting: $key = ${settingResponse.setting.settingValue}',
+          '✅ Successfully fetched setting: $key = ${settingResponse.data?.settingValue ?? "null"}',
           name: serviceName,
         );
 
@@ -167,7 +167,7 @@ class SystemSettingsService extends BaseService {
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body) as Map<String, dynamic>;
-        final settingResponse = SingleSettingResponse.fromJson(responseData);
+        final settingResponse = createSingleSettingResponse(responseData);
 
         developer.log(
           '✅ Successfully updated setting: $key',
@@ -238,24 +238,27 @@ class SystemSettingsService extends BaseService {
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body) as Map<String, dynamic>;
-        final batchResponse = BatchUpdateResponse.fromJson(responseData);
+        final batchResponse = createBatchUpdateResponse(responseData);
 
-        developer.log(
-          '✅ Batch update completed: ${batchResponse.data.successCount} succeeded, '
-          '${batchResponse.data.failureCount} failed',
-          name: serviceName,
-        );
-
-        if (batchResponse.data.hasErrors) {
+        final result = batchResponse.data;
+        if (result != null) {
           developer.log(
-            '⚠️  Batch update errors:',
+            '✅ Batch update completed: ${result.successCount} succeeded, '
+            '${result.failureCount} failed',
             name: serviceName,
           );
-          for (final error in batchResponse.data.errors) {
+
+          if (result.hasErrors) {
             developer.log(
-              '   - ${error.key}: ${error.message}',
+              '⚠️  Batch update errors:',
               name: serviceName,
             );
+            for (final error in result.errors) {
+              developer.log(
+                '   - ${error.key}: ${error.message}',
+                name: serviceName,
+              );
+            }
           }
         }
 

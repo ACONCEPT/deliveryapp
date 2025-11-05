@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'base/json_parsers.dart';
 
 /// Main Menu Model
 ///
@@ -30,17 +30,10 @@ class Menu {
       id: json['id'] as int?,
       name: json['name'] as String,
       description: json['description'] as String?,
-      // Handle menuConfig as either String (from API) or Map (already parsed)
-      menuConfig: json['menu_config'] is String
-          ? jsonDecode(json['menu_config'] as String) as Map<String, dynamic>
-          : json['menu_config'] as Map<String, dynamic>? ?? {},
+      menuConfig: JsonParsers.parseJsonField(json['menu_config']),
       isActive: json['is_active'] as bool? ?? true,
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
-          : null,
-      updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
-          : null,
+      createdAt: JsonParsers.parseDateTime(json['created_at']),
+      updatedAt: JsonParsers.parseDateTime(json['updated_at']),
       assignedRestaurants: (json['assigned_restaurants'] as List?)
           ?.map((e) => RestaurantMenuAssignment.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -52,8 +45,7 @@ class Menu {
       if (id != null) 'id': id,
       'name': name,
       if (description != null) 'description': description,
-      // Always encode menuConfig as JSON string for API
-      'menu_config': jsonEncode(menuConfig),
+      'menu_config': JsonParsers.encodeJsonField(menuConfig),
       'is_active': isActive,
     };
   }
@@ -264,7 +256,7 @@ class MenuItem {
       id: json['id'].toString(),
       name: json['name'] as String,
       description: json['description'] as String? ?? '',
-      price: (json['price'] as num).toDouble(),
+      price: JsonParsers.parseDoubleWithDefault(json['price'], 0.0),
       displayOrder: json['display_order'] as int? ?? 0,
       isActive: json['is_active'] as bool? ?? true,
       isAvailable: json['is_available'] as bool? ?? true,
@@ -491,7 +483,7 @@ class VariantOption {
     return VariantOption(
       id: json['id'].toString(),
       name: json['name'] as String,
-      priceModifier: (json['price_modifier'] as num?)?.toDouble() ?? 0.0,
+      priceModifier: JsonParsers.parseDoubleWithDefault(json['price_modifier'], 0.0),
       description: json['description'] as String?,
     );
   }
@@ -614,7 +606,7 @@ class CustomizationChoice {
     return CustomizationChoice(
       id: json['id'].toString(),
       name: json['name'] as String,
-      priceModifier: (json['price_modifier'] as num?)?.toDouble() ?? 0.0,
+      priceModifier: JsonParsers.parseDoubleWithDefault(json['price_modifier'], 0.0),
     );
   }
 
@@ -659,7 +651,7 @@ class UpdateMenuRequest {
     return {
       if (name != null) 'name': name,
       if (description != null) 'description': description,
-      if (menuConfig != null) 'menu_config': jsonEncode(menuConfig),
+      if (menuConfig != null) 'menu_config': JsonParsers.encodeJsonField(menuConfig!),
       if (isActive != null) 'is_active': isActive,
     };
   }

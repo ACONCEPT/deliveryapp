@@ -1,9 +1,16 @@
-class Address {
+import 'base/json_parsers.dart';
+import 'base/location_mixin.dart';
+
+class Address with LocationFormatterMixin {
   final int? id;
   final int? customerId;
+  @override
   final String addressLine1;
+  @override
   final String? addressLine2;
+  @override
   final String city;
+  @override
   final String? state;
   final String? postalCode;
   final String country;
@@ -39,19 +46,11 @@ class Address {
       state: json['state'] as String?,
       postalCode: json['postal_code'] as String?,
       country: json['country'] as String,
-      latitude: json['latitude'] != null
-          ? (json['latitude'] as num).toDouble()
-          : null,
-      longitude: json['longitude'] != null
-          ? (json['longitude'] as num).toDouble()
-          : null,
+      latitude: JsonParsers.parseDouble(json['latitude']),
+      longitude: JsonParsers.parseDouble(json['longitude']),
       isDefault: json['is_default'] as bool? ?? false,
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
-          : null,
-      updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
-          : null,
+      createdAt: JsonParsers.parseDateTime(json['created_at']),
+      updatedAt: JsonParsers.parseDateTime(json['updated_at']),
     );
   }
 
@@ -71,7 +70,11 @@ class Address {
     };
   }
 
-  // Helper method to get formatted address string
+  // Implement LocationFormatterMixin getters
+  @override
+  String? get zipCode => postalCode;
+
+  // Helper method to get formatted address string using mixin
   String get formattedAddress {
     final parts = <String>[
       addressLine1,
@@ -84,7 +87,7 @@ class Address {
     return parts.join(', ');
   }
 
-  // Helper method to get short address string
+  // Helper method to get short address string using mixin
   String get shortAddress {
     final parts = <String>[
       addressLine1,
