@@ -146,44 +146,35 @@ func (r *customerAddressRepository) Delete(id int) error {
 
 // SetDefault sets an address as the default and unsets others
 func (r *customerAddressRepository) SetDefault(customerID, addressID int) error {
-	tx, err := r.DB.Beginx()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
+	return WithTransaction(r.DB, func(tx *sqlx.Tx) error {
+		// Unset all defaults for this customer
+		unsetQuery := tx.Rebind(`
+			UPDATE customer_addresses
+			SET is_default = FALSE
+			WHERE customer_id = ?
+		`)
+		_, err := tx.Exec(unsetQuery, customerID)
+		if err != nil {
+			return fmt.Errorf("failed to unset defaults: %w", err)
+		}
 
-	// Unset all defaults for this customer
-	unsetQuery := tx.Rebind(`
-		UPDATE customer_addresses
-		SET is_default = FALSE
-		WHERE customer_id = ?
-	`)
-	_, err = tx.Exec(unsetQuery, customerID)
-	if err != nil {
-		return fmt.Errorf("failed to unset defaults: %w", err)
-	}
+		// Set the new default
+		setQuery := tx.Rebind(`
+			UPDATE customer_addresses
+			SET is_default = TRUE
+			WHERE id = ? AND customer_id = ?
+		`)
+		result, err := tx.Exec(setQuery, addressID, customerID)
+		if err != nil {
+			return fmt.Errorf("failed to set default: %w", err)
+		}
 
-	// Set the new default
-	setQuery := tx.Rebind(`
-		UPDATE customer_addresses
-		SET is_default = TRUE
-		WHERE id = ? AND customer_id = ?
-	`)
-	result, err := tx.Exec(setQuery, addressID, customerID)
-	if err != nil {
-		return fmt.Errorf("failed to set default: %w", err)
-	}
+		if err := CheckRowsAffected(result, "address"); err != nil {
+			return fmt.Errorf("address not found or doesn't belong to customer")
+		}
 
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get affected rows: %w", err)
-	}
-
-	if rows == 0 {
-		return fmt.Errorf("address not found or doesn't belong to customer")
-	}
-
-	return tx.Commit()
+		return nil
+	})
 }
 
 // GetDefaultByCustomerID retrieves the default address for a customer
@@ -208,16 +199,7 @@ func (r *customerAddressRepository) GetDefaultByCustomerID(customerID int) (*mod
 
 // VerifyOwnership checks if an address belongs to a customer
 func (r *customerAddressRepository) VerifyOwnership(addressID, customerID int) error {
-	address, err := r.GetByID(addressID)
-	if err != nil {
-		return err
-	}
-
-	if address.CustomerID != customerID {
-		return fmt.Errorf("address does not belong to customer")
-	}
-
-	return nil
+	return VerifyOwnershipByForeignKey(r.DB, "customer_addresses", "id", "customer_id", addressID, customerID)
 }
 
 // GetByIDWithOwnershipCheck gets address and verifies ownership in one call

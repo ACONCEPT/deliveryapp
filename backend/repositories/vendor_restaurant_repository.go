@@ -1,7 +1,6 @@
 package repositories
 
 import (
-	"database/sql"
 	"delivery_app/backend/models"
 	"fmt"
 
@@ -25,12 +24,16 @@ type VendorRestaurantRepository interface {
 
 // vendorRestaurantRepository implements the VendorRestaurantRepository interface
 type vendorRestaurantRepository struct {
+	*BaseRepository[models.VendorRestaurant]
 	DB *sqlx.DB
 }
 
 // NewVendorRestaurantRepository creates a new instance of VendorRestaurantRepository
 func NewVendorRestaurantRepository(db *sqlx.DB) VendorRestaurantRepository {
-	return &vendorRestaurantRepository{DB: db}
+	return &vendorRestaurantRepository{
+		BaseRepository: NewBaseRepository[models.VendorRestaurant](db, "vendor_restaurants"),
+		DB:             db,
+	}
 }
 
 // Create inserts a new vendor-restaurant relationship
@@ -50,35 +53,16 @@ func (r *vendorRestaurantRepository) Create(vendorRestaurant *models.VendorResta
 }
 
 // GetByID retrieves a vendor-restaurant relationship by ID
-func (r *vendorRestaurantRepository) GetByID(id int) (*models.VendorRestaurant, error) {
-	var vendorRestaurant models.VendorRestaurant
-	query := r.DB.Rebind(`SELECT * FROM vendor_restaurants WHERE id = ?`)
-
-	err := r.DB.QueryRowx(query, id).StructScan(&vendorRestaurant)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("vendor-restaurant relationship not found")
-		}
-		return nil, fmt.Errorf("failed to get vendor-restaurant: %w", err)
-	}
-
-	return &vendorRestaurant, nil
-}
+// Inherited from BaseRepository[models.VendorRestaurant]
 
 // GetByRestaurantID retrieves the vendor-restaurant relationship for a specific restaurant
+// Uses base repository GetByField for simplified implementation
 func (r *vendorRestaurantRepository) GetByRestaurantID(restaurantID int) (*models.VendorRestaurant, error) {
-	var vendorRestaurant models.VendorRestaurant
-	query := r.DB.Rebind(`SELECT * FROM vendor_restaurants WHERE restaurant_id = ?`)
-
-	err := r.DB.QueryRowx(query, restaurantID).StructScan(&vendorRestaurant)
+	vendorRestaurant, err := r.GetByField("restaurant_id", restaurantID)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("no vendor found for this restaurant")
-		}
-		return nil, fmt.Errorf("failed to get vendor-restaurant: %w", err)
+		return nil, fmt.Errorf("no vendor found for this restaurant")
 	}
-
-	return &vendorRestaurant, nil
+	return vendorRestaurant, nil
 }
 
 // GetByVendorID retrieves all vendor-restaurant relationships for a specific vendor
@@ -112,26 +96,7 @@ func (r *vendorRestaurantRepository) GetAll() ([]models.VendorRestaurant, error)
 }
 
 // Delete deletes a vendor-restaurant relationship by ID
-func (r *vendorRestaurantRepository) Delete(id int) error {
-	query := r.DB.Rebind(`DELETE FROM vendor_restaurants WHERE id = ?`)
-	args := []interface{}{id}
-
-	result, err := ExecuteStatement(r.DB, query, args)
-	if err != nil {
-		return fmt.Errorf("failed to delete vendor-restaurant: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("vendor-restaurant relationship not found")
-	}
-
-	return nil
-}
+// Inherited from BaseRepository[models.VendorRestaurant]
 
 // DeleteByRestaurantID deletes the vendor-restaurant relationship for a specific restaurant
 func (r *vendorRestaurantRepository) DeleteByRestaurantID(restaurantID int) error {
@@ -143,16 +108,7 @@ func (r *vendorRestaurantRepository) DeleteByRestaurantID(restaurantID int) erro
 		return fmt.Errorf("failed to delete vendor-restaurant: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("no vendor-restaurant relationship found for this restaurant")
-	}
-
-	return nil
+	return CheckRowsAffected(result, "vendor-restaurant relationship")
 }
 
 // TransferOwnership transfers restaurant ownership to a new vendor
@@ -177,16 +133,13 @@ func (r *vendorRestaurantRepository) TransferOwnership(restaurantID, newVendorID
 
 // IsVendorOwner checks if a vendor owns a restaurant
 func (r *vendorRestaurantRepository) IsVendorOwner(restaurantID, vendorID int) (bool, error) {
-	var count int
-	query := r.DB.Rebind(`
-		SELECT COUNT(*) FROM vendor_restaurants
-		WHERE restaurant_id = ? AND vendor_id = ?
-	`)
-
-	err := r.DB.QueryRow(query, restaurantID, vendorID).Scan(&count)
+	err := VerifyOwnershipByJunction(r.DB, "vendor_restaurants", "restaurant_id", "vendor_id", restaurantID, vendorID)
 	if err != nil {
-		return false, fmt.Errorf("failed to check vendor ownership: %w", err)
+		// If error is "ownership not found", return false with no error
+		if err.Error() == "ownership not found or access denied" {
+			return false, nil
+		}
+		return false, err
 	}
-
-	return count > 0, nil
+	return true, nil
 }

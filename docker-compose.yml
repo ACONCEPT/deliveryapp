@@ -41,5 +41,57 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  scheduler:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: delivery_app_scheduler
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://delivery_user:delivery_pass@postgres:5432/delivery_app?sslmode=disable
+      JWT_SECRET: change-this-secret-key-in-production
+      TOKEN_DURATION: 72
+      ENVIRONMENT: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    command: |
+      sh -c '
+      # Install dcron (Alpine cron daemon)
+      apk add --no-cache dcron
+
+      # Create crontab file
+      cat > /etc/crontabs/root <<EOF
+      # Delivery App Scheduled Jobs
+      # Format: minute hour day month weekday command
+
+      # Cancel unconfirmed orders - every minute
+      * * * * * /app/delivery_app jobs cancel-unconfirmed-orders >> /var/log/cron.log 2>&1
+
+      # Cleanup orphaned menus - daily at 2 AM
+      0 2 * * * /app/delivery_app jobs cleanup-orphaned-menus >> /var/log/cron.log 2>&1
+
+      # Archive old orders - weekly on Sunday at 3 AM
+      0 3 * * 0 /app/delivery_app jobs archive-old-orders >> /var/log/cron.log 2>&1
+
+      # Update driver availability - every 5 minutes
+      */5 * * * * /app/delivery_app jobs update-driver-availability >> /var/log/cron.log 2>&1
+      EOF
+
+      # Create log file
+      touch /var/log/cron.log
+
+      # Display crontab for verification
+      echo "=== Crontab configured ==="
+      cat /etc/crontabs/root
+      echo "=========================="
+
+      # Start cron daemon in foreground
+      echo "Starting cron daemon..."
+      crond -f -l 2
+      '
+
 volumes:
   postgres_data:

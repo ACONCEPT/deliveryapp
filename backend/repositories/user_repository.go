@@ -10,6 +10,28 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Approval configuration for vendors
+var vendorApprovalConfig = ApprovalConfig{
+	TableName:          "vendors",
+	IDColumn:           "id",
+	ApprovalStatusCol:  "approval_status",
+	ApprovedByCol:      "approved_by_admin_id",
+	ApprovedAtCol:      "approved_at",
+	IsActiveCol:        "is_active",
+	RejectionReasonCol: "rejection_reason",
+}
+
+// Approval configuration for drivers
+var driverApprovalConfig = ApprovalConfig{
+	TableName:          "drivers",
+	IDColumn:           "id",
+	ApprovalStatusCol:  "approval_status",
+	ApprovedByCol:      "approved_by_admin_id",
+	ApprovedAtCol:      "approved_at",
+	IsActiveCol:        "is_available",
+	RejectionReasonCol: "rejection_reason",
+}
+
 // UserRepository defines the interface for user data access
 type UserRepository interface {
 	Create(user *models.User) error
@@ -333,68 +355,12 @@ func (r *userRepository) GetPendingVendors() ([]models.Vendor, error) {
 
 // ApproveVendor approves a vendor and sets it to active
 func (r *userRepository) ApproveVendor(vendorID, adminID int) error {
-	query := r.DB.Rebind(`
-		UPDATE vendors
-		SET
-			approval_status = 'approved',
-			approved_by_admin_id = ?,
-			approved_at = CURRENT_TIMESTAMP,
-			is_active = true,
-			rejection_reason = NULL,
-			updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-	`)
-
-	args := []interface{}{adminID, vendorID}
-
-	result, err := ExecuteStatement(r.DB, query, args)
-	if err != nil {
-		return fmt.Errorf("failed to approve vendor: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("vendor not found")
-	}
-
-	return nil
+	return ApproveEntity(r.DB, vendorApprovalConfig, vendorID, adminID)
 }
 
 // RejectVendor rejects a vendor with a reason
 func (r *userRepository) RejectVendor(vendorID, adminID int, reason string) error {
-	query := r.DB.Rebind(`
-		UPDATE vendors
-		SET
-			approval_status = 'rejected',
-			approved_by_admin_id = ?,
-			approved_at = CURRENT_TIMESTAMP,
-			is_active = false,
-			rejection_reason = ?,
-			updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-	`)
-
-	args := []interface{}{adminID, reason, vendorID}
-
-	result, err := ExecuteStatement(r.DB, query, args)
-	if err != nil {
-		return fmt.Errorf("failed to reject vendor: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("vendor not found")
-	}
-
-	return nil
+	return RejectEntity(r.DB, vendorApprovalConfig, vendorID, adminID, reason)
 }
 
 // GetVendorByID retrieves a vendor by ID
@@ -485,68 +451,12 @@ func (r *userRepository) GetPendingDrivers() ([]models.Driver, error) {
 
 // ApproveDriver approves a driver and sets them to available
 func (r *userRepository) ApproveDriver(driverID, adminID int) error {
-	query := r.DB.Rebind(`
-		UPDATE drivers
-		SET
-			approval_status = 'approved',
-			approved_by_admin_id = ?,
-			approved_at = CURRENT_TIMESTAMP,
-			is_available = true,
-			rejection_reason = NULL,
-			updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-	`)
-
-	args := []interface{}{adminID, driverID}
-
-	result, err := ExecuteStatement(r.DB, query, args)
-	if err != nil {
-		return fmt.Errorf("failed to approve driver: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("driver not found")
-	}
-
-	return nil
+	return ApproveEntity(r.DB, driverApprovalConfig, driverID, adminID)
 }
 
 // RejectDriver rejects a driver with a reason
 func (r *userRepository) RejectDriver(driverID, adminID int, reason string) error {
-	query := r.DB.Rebind(`
-		UPDATE drivers
-		SET
-			approval_status = 'rejected',
-			approved_by_admin_id = ?,
-			approved_at = CURRENT_TIMESTAMP,
-			is_available = false,
-			rejection_reason = ?,
-			updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-	`)
-
-	args := []interface{}{adminID, reason, driverID}
-
-	result, err := ExecuteStatement(r.DB, query, args)
-	if err != nil {
-		return fmt.Errorf("failed to reject driver: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("driver not found")
-	}
-
-	return nil
+	return RejectEntity(r.DB, driverApprovalConfig, driverID, adminID, reason)
 }
 
 // GetDriverByID retrieves a driver by ID
@@ -574,16 +484,7 @@ func (r *userRepository) DeleteUser(userID int) error {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("user not found")
-	}
-
-	return nil
+	return CheckRowsAffected(result, "user")
 }
 
 // CountAdminUsers returns the total number of admin users in the system

@@ -100,9 +100,9 @@ func (r *configRepository) UpdateSetting(key, value string) error {
 	`
 
 	var existing struct {
-		ID         int                     `db:"id"`
-		DataType   models.SettingDataType  `db:"data_type"`
-		IsEditable bool                    `db:"is_editable"`
+		ID         int                    `db:"id"`
+		DataType   models.SettingDataType `db:"data_type"`
+		IsEditable bool                   `db:"is_editable"`
 	}
 
 	if err := r.db.Get(&existing, existingQuery, key); err != nil {
@@ -134,12 +134,7 @@ func (r *configRepository) UpdateSetting(key, value string) error {
 		return fmt.Errorf("failed to update setting: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to check update result: %w", err)
-	}
-
-	if rowsAffected == 0 {
+	if err := CheckRowsAffected(result, "setting"); err != nil {
 		return fmt.Errorf("setting '%s' could not be updated (not found or read-only)", key)
 	}
 
@@ -148,80 +143,59 @@ func (r *configRepository) UpdateSetting(key, value string) error {
 
 // UpdateMultipleSettings updates multiple settings in a single transaction
 func (r *configRepository) UpdateMultipleSettings(updates map[string]string) error {
-	// Start a transaction
-	tx, err := r.db.Beginx()
-	if err != nil {
-		return fmt.Errorf("failed to start transaction: %w", err)
-	}
+	return WithTransaction(r.db, func(tx *sqlx.Tx) error {
+		// Prepare statements
+		checkQuery := `
+			SELECT id, data_type, is_editable
+			FROM system_settings
+			WHERE setting_key = $1
+		`
 
-	// Ensure transaction is rolled back on error
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
+		updateQuery := `
+			UPDATE system_settings
+			SET setting_value = $1, updated_at = CURRENT_TIMESTAMP
+			WHERE setting_key = $2 AND is_editable = true
+		`
 
-	// Prepare statements
-	checkQuery := `
-		SELECT id, data_type, is_editable
-		FROM system_settings
-		WHERE setting_key = $1
-	`
-
-	updateQuery := `
-		UPDATE system_settings
-		SET setting_value = $1, updated_at = CURRENT_TIMESTAMP
-		WHERE setting_key = $2 AND is_editable = true
-	`
-
-	// Process each update
-	for key, value := range updates {
-		// Check if setting exists and is editable
-		var existing struct {
-			ID         int                     `db:"id"`
-			DataType   models.SettingDataType  `db:"data_type"`
-			IsEditable bool                    `db:"is_editable"`
-		}
-
-		if err := tx.Get(&existing, checkQuery, key); err != nil {
-			if err == sql.ErrNoRows {
-				return fmt.Errorf("setting with key '%s' not found", key)
+		// Process each update
+		for key, value := range updates {
+			// Check if setting exists and is editable
+			var existing struct {
+				ID         int                    `db:"id"`
+				DataType   models.SettingDataType `db:"data_type"`
+				IsEditable bool                   `db:"is_editable"`
 			}
-			return fmt.Errorf("failed to check setting '%s': %w", key, err)
+
+			if err := tx.Get(&existing, checkQuery, key); err != nil {
+				if err == sql.ErrNoRows {
+					return fmt.Errorf("setting with key '%s' not found", key)
+				}
+				return fmt.Errorf("failed to check setting '%s': %w", key, err)
+			}
+
+			// Check if setting is editable
+			if !existing.IsEditable {
+				return fmt.Errorf("setting '%s' is read-only and cannot be modified", key)
+			}
+
+			// Validate the new value
+			if err := models.ValidateSettingValue(key, value, existing.DataType); err != nil {
+				return fmt.Errorf("validation failed for setting '%s': %w", key, err)
+			}
+
+			// Update the setting
+			result, err := tx.Exec(updateQuery, value, key)
+			if err != nil {
+				return fmt.Errorf("failed to update setting '%s': %w", key, err)
+			}
+
+			if err := CheckRowsAffected(result, "setting"); err != nil {
+				return fmt.Errorf("setting '%s' could not be updated", key)
+			}
 		}
 
-		// Check if setting is editable
-		if !existing.IsEditable {
-			return fmt.Errorf("setting '%s' is read-only and cannot be modified", key)
-		}
-
-		// Validate the new value
-		if err := models.ValidateSettingValue(key, value, existing.DataType); err != nil {
-			return fmt.Errorf("validation failed for setting '%s': %w", key, err)
-		}
-
-		// Update the setting
-		result, err := tx.Exec(updateQuery, value, key)
-		if err != nil {
-			return fmt.Errorf("failed to update setting '%s': %w", key, err)
-		}
-
-		rowsAffected, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("failed to check update result for '%s': %w", key, err)
-		}
-
-		if rowsAffected == 0 {
-			return fmt.Errorf("setting '%s' could not be updated", key)
-		}
-	}
-
-	// Commit the transaction
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // SettingExists checks if a setting with the given key exists

@@ -30,12 +30,16 @@ type DistanceRepository interface {
 }
 
 type distanceRepository struct {
+	*BaseRepository[models.DistanceRequest]
 	db *sqlx.DB
 }
 
 // NewDistanceRepository creates a new DistanceRepository instance
 func NewDistanceRepository(db *sqlx.DB) DistanceRepository {
-	return &distanceRepository{db: db}
+	return &distanceRepository{
+		BaseRepository: NewBaseRepository[models.DistanceRequest](db, "distance_requests"),
+		db:             db,
+	}
 }
 
 // CreateDistanceRequest logs a distance calculation request to the database
@@ -84,25 +88,9 @@ func (r *distanceRepository) CreateDistanceRequest(req *models.DistanceRequest) 
 }
 
 // GetDistanceRequestByID retrieves a single distance request by ID
+// Delegates to base repository GetByID for simplified implementation
 func (r *distanceRepository) GetDistanceRequestByID(id int) (*models.DistanceRequest, error) {
-	var req models.DistanceRequest
-
-	query := `
-		SELECT
-			id, user_id, origin_address_id, destination_restaurant_id,
-			origin_latitude, origin_longitude, destination_latitude, destination_longitude,
-			status, distance_meters, duration_seconds, api_response_time_ms,
-			error_message, mapbox_request_id, created_at
-		FROM distance_requests
-		WHERE id = $1
-	`
-
-	err := GetData(r.db, query, &req, []interface{}{id})
-	if err != nil {
-		return nil, fmt.Errorf("distance request not found")
-	}
-
-	return &req, nil
+	return r.GetByID(id)
 }
 
 // GetDistanceRequestsByUserID retrieves recent distance requests for a user

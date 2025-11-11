@@ -1,7 +1,6 @@
 package repositories
 
 import (
-	"database/sql"
 	"delivery_app/backend/models"
 	"fmt"
 
@@ -21,12 +20,16 @@ type CustomizationTemplateRepository interface {
 }
 
 type customizationTemplateRepository struct {
+	*BaseRepository[models.MenuCustomizationTemplate]
 	DB *sqlx.DB
 }
 
 // NewCustomizationTemplateRepository creates a new customization template repository
 func NewCustomizationTemplateRepository(db *sqlx.DB) CustomizationTemplateRepository {
-	return &customizationTemplateRepository{DB: db}
+	return &customizationTemplateRepository{
+		BaseRepository: NewBaseRepository[models.MenuCustomizationTemplate](db, "menu_customization_templates"),
+		DB:             db,
+	}
 }
 
 // Create inserts a new customization template
@@ -49,20 +52,7 @@ func (r *customizationTemplateRepository) Create(template *models.MenuCustomizat
 }
 
 // GetByID retrieves a customization template by ID
-func (r *customizationTemplateRepository) GetByID(id int) (*models.MenuCustomizationTemplate, error) {
-	var template models.MenuCustomizationTemplate
-	query := r.DB.Rebind(`SELECT * FROM menu_customization_templates WHERE id = ?`)
-
-	err := r.DB.QueryRowx(query, id).StructScan(&template)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("customization template not found")
-		}
-		return nil, fmt.Errorf("failed to get customization template: %w", err)
-	}
-
-	return &template, nil
-}
+// Inherited from BaseRepository[models.MenuCustomizationTemplate]
 
 // GetByVendorID retrieves all customization templates owned by a vendor (includes system-wide templates)
 func (r *customizationTemplateRepository) GetByVendorID(vendorID int) ([]models.MenuCustomizationTemplate, error) {
@@ -130,42 +120,9 @@ func (r *customizationTemplateRepository) Update(template *models.MenuCustomizat
 }
 
 // Delete deletes a customization template
-func (r *customizationTemplateRepository) Delete(id int) error {
-	query := r.DB.Rebind(`DELETE FROM menu_customization_templates WHERE id = ?`)
-
-	result, err := r.DB.Exec(query, id)
-	if err != nil {
-		return fmt.Errorf("failed to delete customization template: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("customization template not found")
-	}
-
-	return nil
-}
+// Inherited from BaseRepository[models.MenuCustomizationTemplate]
 
 // VerifyVendorOwnership verifies that a vendor owns a customization template
 func (r *customizationTemplateRepository) VerifyVendorOwnership(templateID, vendorID int) error {
-	var count int
-	query := r.DB.Rebind(`
-		SELECT COUNT(*) FROM menu_customization_templates
-		WHERE id = ? AND vendor_id = ?
-	`)
-
-	err := r.DB.QueryRow(query, templateID, vendorID).Scan(&count)
-	if err != nil {
-		return fmt.Errorf("failed to verify ownership: %w", err)
-	}
-
-	if count == 0 {
-		return fmt.Errorf("customization template not found or access denied")
-	}
-
-	return nil
+	return VerifyOwnershipByForeignKey(r.DB, "menu_customization_templates", "id", "vendor_id", templateID, vendorID)
 }

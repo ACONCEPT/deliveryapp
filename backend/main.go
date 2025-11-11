@@ -4,15 +4,121 @@ import (
 	"delivery_app/backend/config"
 	"delivery_app/backend/database"
 	"delivery_app/backend/handlers"
+	"delivery_app/backend/jobs"
 	"delivery_app/backend/middleware"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/mux"
 	_ "github.com/joho/godotenv/autoload"
+	"github.com/spf13/cobra"
 )
 
 func main() {
+	// Check if running in jobs mode (CLI commands)
+	if len(os.Args) > 1 && os.Args[1] == "jobs" {
+		runJobsCLI()
+		return
+	}
+
+	// Otherwise, run the HTTP server
+	runHTTPServer()
+}
+
+// runJobsCLI runs the CLI commands for scheduled jobs
+func runJobsCLI() {
+	// Load configuration for all jobs
+	conf, err := config.Load()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
+
+	// Initialize database connection for all jobs
+	app, err := database.CreateApp(conf.DatabaseURL)
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	defer app.Close()
+
+	var rootCmd = &cobra.Command{
+		Use:   "delivery_app",
+		Short: "Delivery App CLI",
+	}
+
+	var jobsCmd = &cobra.Command{
+		Use:   "jobs",
+		Short: "Run scheduled job tasks",
+		Long:  "Execute scheduled maintenance and cleanup jobs for the delivery app",
+	}
+
+	// Cancel unconfirmed orders command
+	var cancelUnconfirmedCmd = &cobra.Command{
+		Use:   "cancel-unconfirmed-orders",
+		Short: "Cancel orders not confirmed by vendors within 30 minutes",
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := jobs.CancelUnconfirmedOrders(app.DB); err != nil {
+				log.Fatalf("Job failed: %v", err)
+			}
+			fmt.Println("Job completed successfully")
+		},
+	}
+
+	// Cleanup orphaned menus command
+	var cleanupMenusCmd = &cobra.Command{
+		Use:   "cleanup-orphaned-menus",
+		Short: "Remove menus not linked to restaurants (older than 30 days)",
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := jobs.CleanupOrphanedMenus(app.DB); err != nil {
+				log.Fatalf("Job failed: %v", err)
+			}
+			fmt.Println("Job completed successfully")
+		},
+	}
+
+	// Archive old orders command
+	var archiveOrdersCmd = &cobra.Command{
+		Use:   "archive-old-orders",
+		Short: "Mark old delivered/cancelled orders as inactive (older than 90 days)",
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := jobs.ArchiveOldOrders(app.DB); err != nil {
+				log.Fatalf("Job failed: %v", err)
+			}
+			fmt.Println("Job completed successfully")
+		},
+	}
+
+	// Update driver availability command
+	var updateDriversCmd = &cobra.Command{
+		Use:   "update-driver-availability",
+		Short: "Mark inactive drivers as unavailable (no update in 30 minutes)",
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := jobs.UpdateDriverAvailability(app.DB); err != nil {
+				log.Fatalf("Job failed: %v", err)
+			}
+			fmt.Println("Job completed successfully")
+		},
+	}
+
+	// Add job subcommands to jobs command
+	jobsCmd.AddCommand(cancelUnconfirmedCmd)
+	jobsCmd.AddCommand(cleanupMenusCmd)
+	jobsCmd.AddCommand(archiveOrdersCmd)
+	jobsCmd.AddCommand(updateDriversCmd)
+
+	// Add jobs command to root
+	rootCmd.AddCommand(jobsCmd)
+
+	// Execute CLI (skip "jobs" from os.Args since we already checked it)
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+// runHTTPServer starts the HTTP API server
+func runHTTPServer() {
 	// Load configuration
 	conf, err := config.Load()
 	if err != nil {
@@ -246,9 +352,9 @@ func main() {
 	router.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadsPath))))
 
 	// Apply middleware (order matters - CORS should be first)
-	router.Use(CORSMiddleware)      // Must be first to handle preflight requests
-	router.Use(RecoveryMiddleware)  // Catch panics
-	router.Use(LoggingMiddleware)   // Log requests
+	router.Use(middleware.CORSMiddleware)      // Must be first to handle preflight requests
+	router.Use(middleware.RecoveryMiddleware)  // Catch panics
+	router.Use(middleware.LoggingMiddleware)   // Log requests
 
 	// Start server
 	addr := ":" + conf.ServerPort

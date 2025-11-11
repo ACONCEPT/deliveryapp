@@ -90,9 +90,9 @@ func (r *orderRepository) CreateOrder(order *models.Order) error {
 
 	err := r.db.QueryRowx(
 		query,
-		order.CustomerID, order.RestaurantID, order.RestaurantName, nullInt64(order.DeliveryAddressID), nullInt64(order.DriverID),
+		order.CustomerID, order.RestaurantID, order.RestaurantName, models.ToNullInt64(order.DeliveryAddressID), models.ToNullInt64(order.DriverID),
 		order.Status, order.SubtotalAmount, order.TaxAmount, order.DeliveryFee, order.DiscountAmount, order.TotalAmount,
-		nullTime(order.PlacedAt), nullString(order.SpecialInstructions), nullInt64(order.EstimatedPreparationTime), nullTime(order.EstimatedDeliveryTime),
+		models.ToNullTime(order.PlacedAt), models.ToNullString(order.SpecialInstructions), models.ToNullInt64(order.EstimatedPreparationTime), models.ToNullTime(order.EstimatedDeliveryTime),
 	).Scan(&order.ID, &order.CreatedAt, &order.UpdatedAt, &order.IsActive)
 
 	if err != nil {
@@ -104,85 +104,76 @@ func (r *orderRepository) CreateOrder(order *models.Order) error {
 
 // CreateOrderWithItems creates an order with its items in a transaction
 func (r *orderRepository) CreateOrderWithItems(order *models.Order, items []models.OrderItem) error {
-	tx, err := r.db.Beginx()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	// Fetch restaurant name if not already provided
-	if order.RestaurantName == "" {
-		var restaurantName string
-		err := tx.Get(&restaurantName, "SELECT name FROM restaurants WHERE id = $1", order.RestaurantID)
-		if err != nil {
-			return fmt.Errorf("failed to fetch restaurant name: %w", err)
-		}
-		order.RestaurantName = restaurantName
-	}
-
-	// Create order
-	orderQuery := `
-		INSERT INTO orders (
-			customer_id, restaurant_id, restaurant_name, delivery_address_id, driver_id,
-			status, subtotal_amount, tax_amount, delivery_fee, discount_amount, total_amount,
-			placed_at, special_instructions, estimated_preparation_time, estimated_delivery_time
-		) VALUES (
-			$1, $2, $3, $4, $5,
-			$6, $7, $8, $9, $10, $11,
-			$12, $13, $14, $15
-		)
-		RETURNING id, created_at, updated_at, is_active
-	`
-
-	err = tx.QueryRowx(
-		orderQuery,
-		order.CustomerID, order.RestaurantID, order.RestaurantName, nullInt64(order.DeliveryAddressID), nullInt64(order.DriverID),
-		order.Status, order.SubtotalAmount, order.TaxAmount, order.DeliveryFee, order.DiscountAmount, order.TotalAmount,
-		nullTime(order.PlacedAt), nullString(order.SpecialInstructions), nullInt64(order.EstimatedPreparationTime), nullTime(order.EstimatedDeliveryTime),
-	).Scan(&order.ID, &order.CreatedAt, &order.UpdatedAt, &order.IsActive)
-
-	if err != nil {
-		return fmt.Errorf("failed to create order: %w", err)
-	}
-
-	// Create order items
-	itemQuery := `
-		INSERT INTO order_items (
-			order_id, menu_item_name, menu_item_description, price_at_time, quantity, customizations, line_total
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7
-		)
-		RETURNING id, created_at, updated_at
-	`
-
-	for i := range items {
-		items[i].OrderID = order.ID
-
-		// Convert customizations to JSONB
-		var customizationsJSON []byte
-		if items[i].Customizations != nil {
-			customizationsJSON = items[i].Customizations
-		} else {
-			customizationsJSON = []byte("{}")
+	return WithTransaction(r.db, func(tx *sqlx.Tx) error {
+		// Fetch restaurant name if not already provided
+		if order.RestaurantName == "" {
+			var restaurantName string
+			err := tx.Get(&restaurantName, "SELECT name FROM restaurants WHERE id = $1", order.RestaurantID)
+			if err != nil {
+				return fmt.Errorf("failed to fetch restaurant name: %w", err)
+			}
+			order.RestaurantName = restaurantName
 		}
 
-		err = tx.QueryRowx(
-			itemQuery,
-			items[i].OrderID, items[i].MenuItemName, nullString(items[i].MenuItemDescription),
-			items[i].PriceAtTime, items[i].Quantity, customizationsJSON, items[i].LineTotal,
-		).Scan(&items[i].ID, &items[i].CreatedAt, &items[i].UpdatedAt)
+		// Create order
+		orderQuery := `
+			INSERT INTO orders (
+				customer_id, restaurant_id, restaurant_name, delivery_address_id, driver_id,
+				status, subtotal_amount, tax_amount, delivery_fee, discount_amount, total_amount,
+				placed_at, special_instructions, estimated_preparation_time, estimated_delivery_time
+			) VALUES (
+				$1, $2, $3, $4, $5,
+				$6, $7, $8, $9, $10, $11,
+				$12, $13, $14, $15
+			)
+			RETURNING id, created_at, updated_at, is_active
+		`
+
+		err := tx.QueryRowx(
+			orderQuery,
+			order.CustomerID, order.RestaurantID, order.RestaurantName, models.ToNullInt64(order.DeliveryAddressID), models.ToNullInt64(order.DriverID),
+			order.Status, order.SubtotalAmount, order.TaxAmount, order.DeliveryFee, order.DiscountAmount, order.TotalAmount,
+			models.ToNullTime(order.PlacedAt), models.ToNullString(order.SpecialInstructions), models.ToNullInt64(order.EstimatedPreparationTime), models.ToNullTime(order.EstimatedDeliveryTime),
+		).Scan(&order.ID, &order.CreatedAt, &order.UpdatedAt, &order.IsActive)
 
 		if err != nil {
-			return fmt.Errorf("failed to create order item: %w", err)
+			return fmt.Errorf("failed to create order: %w", err)
 		}
-	}
 
-	// Commit transaction
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
+		// Create order items
+		itemQuery := `
+			INSERT INTO order_items (
+				order_id, menu_item_name, menu_item_description, price_at_time, quantity, customizations, line_total
+			) VALUES (
+				$1, $2, $3, $4, $5, $6, $7
+			)
+			RETURNING id, created_at, updated_at
+		`
 
-	return nil
+		for i := range items {
+			items[i].OrderID = order.ID
+
+			// Convert customizations to JSONB
+			var customizationsJSON []byte
+			if items[i].Customizations != nil {
+				customizationsJSON = items[i].Customizations
+			} else {
+				customizationsJSON = []byte("{}")
+			}
+
+			err = tx.QueryRowx(
+				itemQuery,
+				items[i].OrderID, items[i].MenuItemName, models.ToNullString(items[i].MenuItemDescription),
+				items[i].PriceAtTime, items[i].Quantity, customizationsJSON, items[i].LineTotal,
+			).Scan(&items[i].ID, &items[i].CreatedAt, &items[i].UpdatedAt)
+
+			if err != nil {
+				return fmt.Errorf("failed to create order item: %w", err)
+			}
+		}
+
+		return nil
+	})
 }
 
 // GetOrderByID retrieves an order by ID
@@ -441,11 +432,11 @@ func (r *orderRepository) UpdateOrder(order *models.Order) error {
 
 	err := r.db.QueryRowx(
 		query,
-		order.ID, order.RestaurantID, order.RestaurantName, nullInt64(order.DeliveryAddressID), nullInt64(order.DriverID),
+		order.ID, order.RestaurantID, order.RestaurantName, models.ToNullInt64(order.DeliveryAddressID), models.ToNullInt64(order.DriverID),
 		order.Status, order.SubtotalAmount, order.TaxAmount, order.DeliveryFee, order.DiscountAmount, order.TotalAmount,
-		nullTime(order.PlacedAt), nullTime(order.ConfirmedAt), nullTime(order.ReadyAt), nullTime(order.DeliveredAt), nullTime(order.CancelledAt),
-		nullString(order.SpecialInstructions), nullString(order.CancellationReason),
-		nullInt64(order.EstimatedPreparationTime), nullTime(order.EstimatedDeliveryTime), order.IsActive,
+		models.ToNullTime(order.PlacedAt), models.ToNullTime(order.ConfirmedAt), models.ToNullTime(order.ReadyAt), models.ToNullTime(order.DeliveredAt), models.ToNullTime(order.CancelledAt),
+		models.ToNullString(order.SpecialInstructions), models.ToNullString(order.CancellationReason),
+		models.ToNullInt64(order.EstimatedPreparationTime), models.ToNullTime(order.EstimatedDeliveryTime), order.IsActive,
 	).Scan(&order.UpdatedAt)
 
 	if err != nil {
@@ -472,65 +463,48 @@ func (r *orderRepository) UpdateOrderStatus(orderID int, status models.OrderStat
 		return fmt.Errorf("failed to update order status: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("order not found")
-	}
-
-	return nil
+	return CheckRowsAffected(result, "order")
 }
 
 // UpdateOrderStatusWithHistory updates order status and creates history entry
 func (r *orderRepository) UpdateOrderStatusWithHistory(orderID int, status models.OrderStatus, notes string, userID int) error {
-	tx, err := r.db.Beginx()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
+	return WithTransaction(r.db, func(tx *sqlx.Tx) error {
+		// Get current status
+		var currentStatus string
+		err := tx.Get(&currentStatus, `SELECT status FROM orders WHERE id = $1`, orderID)
+		if err != nil {
+			return fmt.Errorf("failed to get current status: %w", err)
+		}
 
-	// Get current status
-	var currentStatus string
-	err = tx.Get(&currentStatus, `SELECT status FROM orders WHERE id = $1`, orderID)
-	if err != nil {
-		return fmt.Errorf("failed to get current status: %w", err)
-	}
+		// Update status
+		statusQuery := `
+			UPDATE orders SET
+				status = $2::order_status,
+				confirmed_at = CASE WHEN $2::order_status = 'confirmed' THEN CURRENT_TIMESTAMP ELSE confirmed_at END,
+				ready_at = CASE WHEN $2::order_status = 'ready' THEN CURRENT_TIMESTAMP ELSE ready_at END,
+				delivered_at = CASE WHEN $2::order_status = 'delivered' THEN CURRENT_TIMESTAMP ELSE delivered_at END,
+				cancelled_at = CASE WHEN $2::order_status = 'cancelled' THEN CURRENT_TIMESTAMP ELSE cancelled_at END
+			WHERE id = $1
+		`
 
-	// Update status
-	statusQuery := `
-		UPDATE orders SET
-			status = $2::order_status,
-			confirmed_at = CASE WHEN $2::order_status = 'confirmed' THEN CURRENT_TIMESTAMP ELSE confirmed_at END,
-			ready_at = CASE WHEN $2::order_status = 'ready' THEN CURRENT_TIMESTAMP ELSE ready_at END,
-			delivered_at = CASE WHEN $2::order_status = 'delivered' THEN CURRENT_TIMESTAMP ELSE delivered_at END,
-			cancelled_at = CASE WHEN $2::order_status = 'cancelled' THEN CURRENT_TIMESTAMP ELSE cancelled_at END
-		WHERE id = $1
-	`
+		_, err = tx.Exec(statusQuery, orderID, status)
+		if err != nil {
+			return fmt.Errorf("failed to update order status: %w", err)
+		}
 
-	_, err = tx.Exec(statusQuery, orderID, status)
-	if err != nil {
-		return fmt.Errorf("failed to update order status: %w", err)
-	}
+		// Create history entry
+		historyQuery := `
+			INSERT INTO order_status_history (order_id, user_id, from_status, to_status, notes)
+			VALUES ($1, $2, $3, $4, $5)
+		`
 
-	// Create history entry
-	historyQuery := `
-		INSERT INTO order_status_history (order_id, user_id, from_status, to_status, notes)
-		VALUES ($1, $2, $3, $4, $5)
-	`
+		_, err = tx.Exec(historyQuery, orderID, userID, currentStatus, status, models.ToNullString(models.NullString{NullString: sql.NullString{String: notes, Valid: notes != ""}}))
+		if err != nil {
+			return fmt.Errorf("failed to create status history: %w", err)
+		}
 
-	_, err = tx.Exec(historyQuery, orderID, userID, currentStatus, status, nullString(models.NullString{NullString: sql.NullString{String: notes, Valid: notes != ""}}))
-	if err != nil {
-		return fmt.Errorf("failed to create status history: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // CancelOrder cancels an order with a reason
@@ -548,16 +522,7 @@ func (r *orderRepository) CancelOrder(orderID int, reason string) error {
 		return fmt.Errorf("failed to cancel order: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("order not found")
-	}
-
-	return nil
+	return CheckRowsAffected(result, "order")
 }
 
 // ============================================================================
@@ -582,7 +547,7 @@ func (r *orderRepository) AddItemToOrder(orderID int, item *models.OrderItem) er
 
 	err := r.db.QueryRowx(
 		query,
-		orderID, item.MenuItemName, nullString(item.MenuItemDescription),
+		orderID, item.MenuItemName, models.ToNullString(item.MenuItemDescription),
 		item.PriceAtTime, item.Quantity, customizationsJSON, item.LineTotal,
 	).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt)
 
@@ -615,7 +580,7 @@ func (r *orderRepository) UpdateOrderItem(item *models.OrderItem) error {
 
 	err := r.db.QueryRowx(
 		query,
-		item.ID, item.MenuItemName, nullString(item.MenuItemDescription),
+		item.ID, item.MenuItemName, models.ToNullString(item.MenuItemDescription),
 		item.PriceAtTime, item.Quantity, customizationsJSON, item.LineTotal,
 	).Scan(&item.UpdatedAt)
 
@@ -635,16 +600,7 @@ func (r *orderRepository) RemoveOrderItem(itemID int) error {
 		return fmt.Errorf("failed to remove order item: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("order item not found")
-	}
-
-	return nil
+	return CheckRowsAffected(result, "order item")
 }
 
 // GetOrderItems retrieves all items for an order
@@ -702,8 +658,8 @@ func (r *orderRepository) CreateStatusHistory(history *models.OrderStatusHistory
 
 	err := r.db.QueryRowx(
 		query,
-		history.OrderID, nullInt64(history.UserID), nullString(history.FromStatus),
-		history.ToStatus, nullString(history.Notes), metadataJSON,
+		history.OrderID, models.ToNullInt64(history.UserID), models.ToNullString(history.FromStatus),
+		history.ToStatus, models.ToNullString(history.Notes), metadataJSON,
 	).Scan(&history.ID, &history.CreatedAt)
 
 	if err != nil {
@@ -807,27 +763,6 @@ func (r *orderRepository) GetOrderCountByStatus() (map[string]int, error) {
 // HELPER FUNCTIONS
 // ============================================================================
 
-func nullString(ns models.NullString) interface{} {
-	if ns.Valid {
-		return ns.String
-	}
-	return nil
-}
-
-func nullInt64(ni models.NullInt64) interface{} {
-	if ni.Valid {
-		return ni.Int64
-	}
-	return nil
-}
-
-func nullTime(nt models.NullTime) interface{} {
-	if nt.Valid {
-		return nt.Time
-	}
-	return nil
-}
-
 func jsonToRawMessage(data interface{}) (json.RawMessage, error) {
 	if data == nil {
 		return json.RawMessage("{}"), nil
@@ -874,82 +809,74 @@ func (r *orderRepository) GetAvailableOrdersForDriver(limit, offset int) ([]mode
 // AssignDriverToOrder assigns a driver to an order and updates status to driver_assigned
 // Uses atomic check-and-set to prevent race conditions
 func (r *orderRepository) AssignDriverToOrder(orderID, driverID int) error {
-	tx, err := r.db.Beginx()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	// Atomic check-and-set: only update if order is ready and unassigned
-	// This prevents race conditions when multiple drivers try to assign simultaneously
-	var updatedStatus string
-	var updatedDriverID int64
-	err = tx.QueryRow(`
-		UPDATE orders
-		SET driver_id = $2,
-		    status = 'driver_assigned'
-		WHERE id = $1
-		  AND status = 'ready'
-		  AND driver_id IS NULL
-		  AND is_active = true
-		RETURNING status, driver_id
-	`, orderID, driverID).Scan(&updatedStatus, &updatedDriverID)
-
-	if err == sql.ErrNoRows {
-		// Update failed - determine why for better error message using custom error types
-		var currentStatus string
-		var currentDriverID sql.NullInt64
-		var isActive bool
-		checkErr := r.db.QueryRow(`
-			SELECT status, driver_id, is_active
-			FROM orders
+	return WithTransaction(r.db, func(tx *sqlx.Tx) error {
+		// Atomic check-and-set: only update if order is ready and unassigned
+		// This prevents race conditions when multiple drivers try to assign simultaneously
+		var updatedStatus string
+		var updatedDriverID int64
+		err := tx.QueryRow(`
+			UPDATE orders
+			SET driver_id = $2,
+				status = 'driver_assigned'
 			WHERE id = $1
-		`, orderID).Scan(&currentStatus, &currentDriverID, &isActive)
+			  AND status = 'ready'
+			  AND driver_id IS NULL
+			  AND is_active = true
+			RETURNING status, driver_id
+		`, orderID, driverID).Scan(&updatedStatus, &updatedDriverID)
 
-		if checkErr == sql.ErrNoRows {
-			return models.ErrOrderNotFound
+		if err == sql.ErrNoRows {
+			// Update failed - determine why for better error message using custom error types
+			var currentStatus string
+			var currentDriverID sql.NullInt64
+			var isActive bool
+			checkErr := r.db.QueryRow(`
+				SELECT status, driver_id, is_active
+				FROM orders
+				WHERE id = $1
+			`, orderID).Scan(&currentStatus, &currentDriverID, &isActive)
+
+			if checkErr == sql.ErrNoRows {
+				return models.ErrOrderNotFound
+			}
+			if !isActive {
+				return models.ErrOrderNotActive
+			}
+			if currentDriverID.Valid {
+				return models.ErrOrderAlreadyAssigned
+			}
+			if currentStatus != string(models.OrderStatusReady) {
+				return models.NewOrderNotReadyError(currentStatus)
+			}
+			// Shouldn't reach here, but just in case
+			return models.ErrOrderNotAvailable
 		}
-		if !isActive {
-			return models.ErrOrderNotActive
+
+		if err != nil {
+			return fmt.Errorf("failed to assign driver: %w", err)
 		}
-		if currentDriverID.Valid {
-			return models.ErrOrderAlreadyAssigned
+
+		// Create status history entry
+		historyQuery := `
+			INSERT INTO order_status_history (order_id, user_id, from_status, to_status, notes)
+			VALUES ($1, (SELECT user_id FROM drivers WHERE id = $2), $3, $4, $5)
+		`
+
+		_, err = tx.Exec(
+			historyQuery,
+			orderID,
+			driverID,
+			models.OrderStatusReady,
+			models.OrderStatusDriverAssigned,
+			"Driver self-assigned to order",
+		)
+
+		if err != nil {
+			return fmt.Errorf("failed to create status history: %w", err)
 		}
-		if currentStatus != string(models.OrderStatusReady) {
-			return models.NewOrderNotReadyError(currentStatus)
-		}
-		// Shouldn't reach here, but just in case
-		return models.ErrOrderNotAvailable
-	}
 
-	if err != nil {
-		return fmt.Errorf("failed to assign driver: %w", err)
-	}
-
-	// Create status history entry
-	historyQuery := `
-		INSERT INTO order_status_history (order_id, user_id, from_status, to_status, notes)
-		VALUES ($1, (SELECT user_id FROM drivers WHERE id = $2), $3, $4, $5)
-	`
-
-	_, err = tx.Exec(
-		historyQuery,
-		orderID,
-		driverID,
-		models.OrderStatusReady,
-		models.OrderStatusDriverAssigned,
-		"Driver self-assigned to order",
-	)
-
-	if err != nil {
-		return fmt.Errorf("failed to create status history: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // GetDriverOrderInfo retrieves driver-specific order information including item count and addresses
@@ -982,15 +909,15 @@ func (r *orderRepository) GetDriverOrderInfo(orderID int) (*models.DriverOrderIn
 	`
 
 	var (
-		response           models.DriverOrderInfoResponse
-		prepTime           sql.NullInt64
+		response            models.DriverOrderInfoResponse
+		prepTime            sql.NullInt64
 		specialInstructions sql.NullString
-		placedAt           sql.NullTime
-		estimatedDelivery  sql.NullTime
-		restaurantLat      sql.NullFloat64
-		restaurantLng      sql.NullFloat64
-		deliveryLat        sql.NullFloat64
-		deliveryLng        sql.NullFloat64
+		placedAt            sql.NullTime
+		estimatedDelivery   sql.NullTime
+		restaurantLat       sql.NullFloat64
+		restaurantLng       sql.NullFloat64
+		deliveryLat         sql.NullFloat64
+		deliveryLng         sql.NullFloat64
 	)
 
 	err := r.db.QueryRow(query, orderID).Scan(
@@ -1045,7 +972,7 @@ func (r *orderRepository) GetDriverOrderInfo(orderID int) (*models.DriverOrderIn
 		// Pythagorean theorem for approximate distance
 		// Note: This is simplified and assumes flat earth (good enough for short distances)
 		distanceDegrees := latDiff*latDiff + lngDiff*lngDiff
-		
+
 		// Convert to miles (rough approximation)
 		// For small distances, we can estimate sqrt(x) ≈ x/2 when x is small
 		var distanceMiles float64

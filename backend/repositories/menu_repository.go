@@ -160,16 +160,7 @@ func (r *menuRepository) Delete(id int) error {
 		return fmt.Errorf("failed to delete menu: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("menu not found")
-	}
-
-	return nil
+	return CheckRowsAffected(result, "menu")
 }
 
 // AssignToRestaurant assigns a menu to a restaurant
@@ -256,38 +247,34 @@ func (r *menuRepository) GetMenusByRestaurantID(restaurantID int) ([]models.Menu
 
 // SetActiveMenu sets a menu as active for a restaurant (transaction)
 func (r *menuRepository) SetActiveMenu(restaurantID, menuID int) error {
-	tx, err := r.DB.Beginx()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
+	return WithTransaction(r.DB, func(tx *sqlx.Tx) error {
+		// Verify menu is assigned to restaurant
+		var exists bool
+		checkQuery := tx.Rebind(`SELECT EXISTS(SELECT 1 FROM restaurant_menus WHERE restaurant_id=? AND menu_id=?)`)
+		err := tx.QueryRowx(checkQuery, restaurantID, menuID).Scan(&exists)
+		if err != nil {
+			return fmt.Errorf("failed to check menu assignment: %w", err)
+		}
+		if !exists {
+			return fmt.Errorf("menu not assigned to restaurant")
+		}
 
-	// Verify menu is assigned to restaurant
-	var exists bool
-	checkQuery := tx.Rebind(`SELECT EXISTS(SELECT 1 FROM restaurant_menus WHERE restaurant_id=? AND menu_id=?)`)
-	err = tx.QueryRowx(checkQuery, restaurantID, menuID).Scan(&exists)
-	if err != nil {
-		return fmt.Errorf("failed to check menu assignment: %w", err)
-	}
-	if !exists {
-		return fmt.Errorf("menu not assigned to restaurant")
-	}
+		// Unset all active menus for this restaurant
+		unsetQuery := tx.Rebind(`UPDATE restaurant_menus SET is_active=false WHERE restaurant_id=?`)
+		_, err = tx.Exec(unsetQuery, restaurantID)
+		if err != nil {
+			return fmt.Errorf("failed to unset active menus: %w", err)
+		}
 
-	// Unset all active menus for this restaurant
-	unsetQuery := tx.Rebind(`UPDATE restaurant_menus SET is_active=false WHERE restaurant_id=?`)
-	_, err = tx.Exec(unsetQuery, restaurantID)
-	if err != nil {
-		return fmt.Errorf("failed to unset active menus: %w", err)
-	}
+		// Set specified menu as active
+		setQuery := tx.Rebind(`UPDATE restaurant_menus SET is_active=true WHERE restaurant_id=? AND menu_id=?`)
+		_, err = tx.Exec(setQuery, restaurantID, menuID)
+		if err != nil {
+			return fmt.Errorf("failed to set active menu: %w", err)
+		}
 
-	// Set specified menu as active
-	setQuery := tx.Rebind(`UPDATE restaurant_menus SET is_active=true WHERE restaurant_id=? AND menu_id=?`)
-	_, err = tx.Exec(setQuery, restaurantID, menuID)
-	if err != nil {
-		return fmt.Errorf("failed to set active menu: %w", err)
-	}
-
-	return tx.Commit()
+		return nil
+	})
 }
 
 // IsMenuAssignedToRestaurants checks if menu is assigned to any restaurant

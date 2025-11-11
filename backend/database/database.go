@@ -26,7 +26,6 @@ type Dependencies struct {
 	Approvals              repositories.ApprovalRepository
 	Orders                 repositories.OrderRepository
 	Config                 repositories.ConfigRepository
-	SystemSettings         repositories.SystemSettingsRepository
 	Distance               repositories.DistanceRepository
 	Messages               repositories.MessageRepository
 }
@@ -64,7 +63,6 @@ func CreateApp(databaseURL string) (*App, error) {
 		Approvals:              repositories.NewApprovalRepository(db),
 		Orders:                 repositories.NewOrderRepository(db),
 		Config:                 repositories.NewConfigRepository(db),
-		SystemSettings:         repositories.NewSystemSettingsRepository(db),
 		Distance:               repositories.NewDistanceRepository(db),
 		Messages:               repositories.NewMessageRepository(db),
 	}

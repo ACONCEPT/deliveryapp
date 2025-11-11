@@ -1,0 +1,35 @@
+# Terraform files
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+!terraform.tfvars.example
+*.tfplan
+*.tfstate.backup
+
+# Backend configuration (generated, contains account-specific info)
+backend.hcl
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI configuration files
+.terraformrc
+terraform.rc
+
+# Environment files (contain secrets!)
+.env
+.env.*
+!.env.example
+
+# Build artifacts
+../build/
+*.zip

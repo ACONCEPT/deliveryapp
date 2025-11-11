@@ -16,6 +16,8 @@ Sets up everything: database, migrations, test data, and builds backend.
 
 ### 📦 Database Management
 
+#### Local Development (Docker)
+
 **Setup Database**
 ```bash
 ./tools/sh/setup-database.sh
@@ -32,6 +34,63 @@ Sets up everything: database, migrations, test data, and builds backend.
 - Seeds database with sample users (customer1, vendor1, driver1, admin1)
 - Note: These use plain passwords and won't work with API authentication
 - Use API signup endpoint for properly hashed passwords
+
+#### AWS RDS (Production/Staging)
+
+**Migrate RDS Database (Interactive)**
+```bash
+# Using default dev RDS
+./tools/sh/migrate-rds.sh
+
+# Using custom database URL
+./tools/sh/migrate-rds.sh "postgres://user:pass@host:5432/dbname?sslmode=require"
+
+# Using environment variable
+export DATABASE_URL="postgres://user:pass@rds.amazonaws.com:5432/db?sslmode=require"
+./tools/sh/migrate-rds.sh
+```
+- Tests database connectivity with timeout
+- Shows current database state
+- **Asks for confirmation** before dropping data
+- Drops all existing objects (drop_all.sql)
+- Runs schema migration (schema.sql)
+- Verifies migration success
+- Shows table and row counts
+
+**Quick RDS Migration (No Prompts)**
+```bash
+./tools/sh/quick-migrate-rds.sh
+```
+- Fast migration without confirmation prompts
+- **⚠️ USE WITH CAUTION** - destroys all data immediately
+- Ideal for CI/CD pipelines and automation
+
+**RDS Connection Issues?**
+
+If you get connection timeout errors:
+
+1. **Check Security Group:**
+   ```bash
+   aws rds describe-db-instances --db-instance-identifier delivery-app-db-dev
+   ```
+
+2. **Add Your IP to Security Group:**
+   ```bash
+   # Get your IP
+   curl -s https://api.ipify.org
+
+   # Add to security group (replace sg-xxxxx)
+   aws ec2 authorize-security-group-ingress \
+     --group-id sg-xxxxx \
+     --protocol tcp \
+     --port 5432 \
+     --cidr YOUR_IP/32
+   ```
+
+3. **Test Connection:**
+   ```bash
+   nc -zv delivery-app-db-dev.cyt2u0ouqtpr.us-east-1.rds.amazonaws.com 5432
+   ```
 
 ---
 
@@ -233,11 +292,13 @@ TOKEN_DURATION=72
 
 | Command | Purpose |
 |---------|---------|
-| `full-setup.sh` | Complete setup from scratch |
-| `setup-database.sh` | Start database + migrations |
-| `seed-database.sh` | Add test data |
+| `full-setup.sh` | Complete setup from scratch (local) |
+| `setup-database.sh` | Start local database + migrations |
+| `migrate-rds.sh` | Migrate AWS RDS database (interactive) |
+| `quick-migrate-rds.sh` | Migrate AWS RDS (no prompts) |
+| `seed-database.sh` | Add test data to local database |
 | `start-backend.sh` | Run API server |
-| `stop-all.sh` | Stop everything |
+| `stop-all.sh` | Stop all local services |
 
 ---
 

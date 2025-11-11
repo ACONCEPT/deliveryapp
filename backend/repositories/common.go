@@ -83,3 +83,18 @@ func WithTransaction(db *sqlx.DB, fn func(*sqlx.Tx) error) error {
 
 	return nil
 }
+
+// CheckRowsAffected validates that a SQL operation affected at least one row
+// Returns error if no rows were affected or if RowsAffected() fails
+func CheckRowsAffected(result sql.Result, entityName string) error {
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("%s not found", entityName)
+	}
+
+	return nil
+}

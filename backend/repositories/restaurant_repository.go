@@ -8,6 +8,17 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// Approval configuration for restaurants
+var restaurantApprovalConfig = ApprovalConfig{
+	TableName:          "restaurants",
+	IDColumn:           "id",
+	ApprovalStatusCol:  "approval_status",
+	ApprovedByCol:      "approved_by_admin_id",
+	ApprovedAtCol:      "approved_at",
+	IsActiveCol:        "is_active",
+	RejectionReasonCol: "rejection_reason",
+}
+
 // RestaurantRepository defines the interface for restaurant data access
 type RestaurantRepository interface {
 	Create(restaurant *models.Restaurant) error
@@ -207,16 +218,7 @@ func (r *restaurantRepository) Delete(id int) error {
 		return fmt.Errorf("failed to delete restaurant: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("restaurant not found")
-	}
-
-	return nil
+	return CheckRowsAffected(result, "restaurant")
 }
 
 // GetPendingRestaurants retrieves all restaurants with pending approval status
@@ -255,139 +257,68 @@ func (r *restaurantRepository) GetApprovedRestaurants() ([]models.Restaurant, er
 
 // ApproveRestaurant approves a restaurant and sets it to active
 func (r *restaurantRepository) ApproveRestaurant(restaurantID, adminID int) error {
-	query := r.DB.Rebind(`
-		UPDATE restaurants
-		SET
-			approval_status = 'approved',
-			approved_by_admin_id = ?,
-			approved_at = CURRENT_TIMESTAMP,
-			is_active = true,
-			rejection_reason = NULL,
-			updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-	`)
-
-	result, err := r.DB.Exec(query, adminID, restaurantID)
-	if err != nil {
-		return fmt.Errorf("failed to approve restaurant: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("restaurant not found")
-	}
-
-	return nil
+	return ApproveEntity(r.DB, restaurantApprovalConfig, restaurantID, adminID)
 }
 
 // RejectRestaurant rejects a restaurant with a reason
 func (r *restaurantRepository) RejectRestaurant(restaurantID, adminID int, reason string) error {
-	query := r.DB.Rebind(`
-		UPDATE restaurants
-		SET
-			approval_status = 'rejected',
-			approved_by_admin_id = ?,
-			approved_at = CURRENT_TIMESTAMP,
-			is_active = false,
-			rejection_reason = ?,
-			updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-	`)
-
-	result, err := r.DB.Exec(query, adminID, reason, restaurantID)
-	if err != nil {
-		return fmt.Errorf("failed to reject restaurant: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("restaurant not found")
-	}
-
-	return nil
+	return RejectEntity(r.DB, restaurantApprovalConfig, restaurantID, adminID, reason)
 }
 
 // CreateWithVendor creates a restaurant and vendor relationship in a transaction
 func (r *restaurantRepository) CreateWithVendor(restaurant *models.Restaurant, vendorID int) error {
-	tx, err := r.DB.Beginx()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
+	return WithTransaction(r.DB, func(tx *sqlx.Tx) error {
+		// Create the restaurant
+		query := tx.Rebind(`
+			INSERT INTO restaurants (name, description, phone, address_line1, address_line2,
+			                        city, state, postal_code, country, latitude, longitude,
+			                        hours_of_operation, average_prep_time_minutes, is_active)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			RETURNING id, name, description, phone, address_line1, address_line2, city, state,
+			          postal_code, country, latitude, longitude, hours_of_operation,
+			          average_prep_time_minutes, is_active, rating, total_orders,
+			          approval_status, approved_by_admin_id, approved_at, rejection_reason,
+			          created_at, updated_at
+		`)
 
-	// Create the restaurant
-	query := tx.Rebind(`
-		INSERT INTO restaurants (name, description, phone, address_line1, address_line2,
-		                        city, state, postal_code, country, latitude, longitude,
-		                        hours_of_operation, average_prep_time_minutes, is_active)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		RETURNING id, name, description, phone, address_line1, address_line2, city, state,
-		          postal_code, country, latitude, longitude, hours_of_operation,
-		          average_prep_time_minutes, is_active, rating, total_orders,
-		          approval_status, approved_by_admin_id, approved_at, rejection_reason,
-		          created_at, updated_at
-	`)
+		err := tx.QueryRowx(query,
+			restaurant.Name,
+			restaurant.Description,
+			restaurant.Phone,
+			restaurant.AddressLine1,
+			restaurant.AddressLine2,
+			restaurant.City,
+			restaurant.State,
+			restaurant.PostalCode,
+			restaurant.Country,
+			restaurant.Latitude,
+			restaurant.Longitude,
+			restaurant.HoursOfOperation,
+			restaurant.AveragePrepTimeMin,
+			restaurant.IsActive,
+		).StructScan(restaurant)
+		if err != nil {
+			return fmt.Errorf("failed to create restaurant: %w", err)
+		}
 
-	err = tx.QueryRowx(query,
-		restaurant.Name,
-		restaurant.Description,
-		restaurant.Phone,
-		restaurant.AddressLine1,
-		restaurant.AddressLine2,
-		restaurant.City,
-		restaurant.State,
-		restaurant.PostalCode,
-		restaurant.Country,
-		restaurant.Latitude,
-		restaurant.Longitude,
-		restaurant.HoursOfOperation,
-		restaurant.AveragePrepTimeMin,
-		restaurant.IsActive,
-	).StructScan(restaurant)
-	if err != nil {
-		return fmt.Errorf("failed to create restaurant: %w", err)
-	}
+		// Create vendor-restaurant relationship
+		vrQuery := tx.Rebind(`
+			INSERT INTO vendor_restaurants (vendor_id, restaurant_id)
+			VALUES (?, ?)
+		`)
 
-	// Create vendor-restaurant relationship
-	vrQuery := tx.Rebind(`
-		INSERT INTO vendor_restaurants (vendor_id, restaurant_id)
-		VALUES (?, ?)
-	`)
+		_, err = tx.Exec(vrQuery, vendorID, restaurant.ID)
+		if err != nil {
+			return fmt.Errorf("failed to create vendor-restaurant relationship: %w", err)
+		}
 
-	_, err = tx.Exec(vrQuery, vendorID, restaurant.ID)
-	if err != nil {
-		return fmt.Errorf("failed to create vendor-restaurant relationship: %w", err)
-	}
-
-	return tx.Commit()
+		return nil
+	})
 }
 
 // VerifyVendorOwnership checks if a restaurant belongs to a vendor
 func (r *restaurantRepository) VerifyVendorOwnership(restaurantID, vendorID int) error {
-	var count int
-	query := r.DB.Rebind(`
-		SELECT COUNT(*) FROM vendor_restaurants
-		WHERE restaurant_id = ? AND vendor_id = ?
-	`)
-
-	err := r.DB.QueryRow(query, restaurantID, vendorID).Scan(&count)
-	if err != nil {
-		return fmt.Errorf("failed to verify ownership: %w", err)
-	}
-
-	if count == 0 {
-		return fmt.Errorf("restaurant does not belong to vendor")
-	}
-
-	return nil
+	return VerifyOwnershipByJunction(r.DB, "vendor_restaurants", "restaurant_id", "vendor_id", restaurantID, vendorID)
 }
 
 // GetByIDWithOwnershipCheck gets restaurant and verifies vendor ownership
@@ -440,16 +371,7 @@ func (r *restaurantRepository) UpdateRestaurantSettings(restaurantID int, hoursO
 		return fmt.Errorf("failed to update restaurant settings: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("restaurant not found")
-	}
-
-	return nil
+	return CheckRowsAffected(result, "restaurant")
 }
 
 // UpdateRestaurantPrepTime updates only the average prep time for a restaurant
@@ -466,16 +388,7 @@ func (r *restaurantRepository) UpdateRestaurantPrepTime(restaurantID int, avgPre
 		return fmt.Errorf("failed to update prep time: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("restaurant not found")
-	}
-
-	return nil
+	return CheckRowsAffected(result, "restaurant")
 }
 
 // joinStrings is a helper function to join strings with a separator

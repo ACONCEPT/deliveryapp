@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../config/api_config.dart';
 
 /// Enhanced Image Field with Upload Support
 ///
@@ -72,7 +73,7 @@ class _ImageUploadFieldState extends State<ImageUploadField> {
 
   Future<void> _uploadImageToServer(XFile image) async {
     try {
-      final url = Uri.parse('http://localhost:8080/api/vendor/upload-image');
+      final url = Uri.parse('${ApiConfig.baseUrl}/api/vendor/upload-image');
 
       var request = http.MultipartRequest('POST', url);
 

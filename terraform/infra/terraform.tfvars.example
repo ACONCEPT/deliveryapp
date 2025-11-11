@@ -1,0 +1,61 @@
+# AWS Configuration
+aws_region  = "us-east-1"
+environment = "dev"
+
+# Project Configuration
+project_name = "delivery-app"
+
+# VPC Configuration
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b"]
+
+# RDS Database Configuration
+db_instance_class       = "db.t3.micro"      # Free Tier: db.t3.micro or db.t4g.micro
+db_allocated_storage    = 20                 # Free Tier: up to 20GB
+db_name                 = "delivery_app"
+db_username             = "delivery_user"
+db_password             = ""                 # Leave empty to auto-generate (recommended)
+db_backup_retention_days = 7                 # Free Tier: up to 7 days
+db_publicly_accessible  = false              # Set to false for production
+
+# Database Security
+enable_deletion_protection         = false  # Set to true for production
+skip_final_snapshot                = true   # Set to false for production
+store_secrets_in_secrets_manager   = true   # Recommended for production
+
+# Lambda Configuration
+lambda_deployment_package = "../build/lambda-deployment.zip"
+lambda_memory_size        = 512   # 512MB-1024MB recommended
+lambda_timeout            = 30    # seconds
+lambda_log_retention_days = 7     # days
+use_lambda_function_url   = false # Set to true to skip API Gateway
+
+# API Gateway Configuration
+api_gateway_timeout_ms        = 29000  # milliseconds (max 30000)
+api_gateway_burst_limit       = 5000   # requests
+api_gateway_rate_limit        = 10000  # requests per second
+api_gateway_log_retention_days = 7     # days
+cors_allowed_origins          = ["*"]  # Restrict in production
+
+# Custom Domain (Optional)
+api_custom_domain      = "" # e.g., "api.example.com"
+acm_certificate_arn    = "" # Required if api_custom_domain is set
+
+# CloudFront Configuration
+cloudfront_price_class      = "PriceClass_100" # Free Tier: US, Canada, Europe
+enable_cloudfront_logging   = false
+cloudfront_logs_retention_days = 30
+
+# Frontend Custom Domain (Optional)
+frontend_custom_domain         = "" # e.g., "app.example.com"
+frontend_acm_certificate_arn   = "" # Must be in us-east-1
+
+# Application Configuration
+jwt_secret          = "change-this-to-a-secure-random-string-at-least-32-characters-long"
+token_duration      = 72  # hours
+mapbox_access_token = ""  # Get from https://account.mapbox.com/access-tokens/
+backend_port        = 8080
+
+# Scheduled Jobs Configuration
+enable_scheduled_jobs          = true  # Set to false to disable all jobs
+lambda_jobs_deployment_package = "../build/lambda-jobs-deployment.zip"
