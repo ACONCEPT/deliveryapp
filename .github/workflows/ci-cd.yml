@@ -19,7 +19,7 @@ jobs:
   deploy-dev:
     name: Deploy to Development
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop'
+    #if: github.ref == 'refs/heads/develop'
     environment:
       name: development
       url: https://d1b8hnq3oepzhd.cloudfront.net
