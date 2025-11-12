@@ -32,7 +32,7 @@ variable "github_repo" {
 variable "github_branches" {
   description = "List of GitHub branches allowed to assume the role"
   type        = list(string)
-  default     = ["main", "develop"]
+  default     = ["main", "develop", "deploy"]
 }
 
 # Permissions Configuration
