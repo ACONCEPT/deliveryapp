@@ -2,7 +2,7 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main, develop]
+    branches: [deploy]
 
 permissions:
   id-token: write   # Required for OIDC authentication with AWS
@@ -234,74 +234,74 @@ jobs:
             /tmp/migrate-response.json
           cat /tmp/migrate-response.json
 
-  # Deploy to Production (manual approval required)
-  deploy-prod:
-    name: Deploy to Production
-    runs-on: ubuntu-latest
-    needs: [backend-build, frontend-build]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment:
-      name: production
-      url: https://your-production-domain.com
+  ## Deploy to Production (manual approval required)
+  #deploy-prod:
+  #  name: Deploy to Production
+  #  runs-on: ubuntu-latest
+  #  needs: [backend-build, frontend-build]
+  #  if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #  environment:
+  #    name: production
+  #    url: https://your-production-domain.com
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+  #  steps:
+  #    - name: Checkout code
+  #      uses: actions/checkout@v4
 
-      - name: Download Lambda artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: lambda-deployment
-          path: build/
+  #    - name: Download Lambda artifact
+  #      uses: actions/download-artifact@v4
+  #      with:
+  #        name: lambda-deployment
+  #        path: build/
 
-      - name: Download Jobs artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: lambda-jobs-deployment
-          path: build/
+  #    - name: Download Jobs artifacts
+  #      uses: actions/download-artifact@v4
+  #      with:
+  #        name: lambda-jobs-deployment
+  #        path: build/
 
-      - name: Download Frontend artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: flutter-web-build
-          path: frontend/build/web
+  #    - name: Download Frontend artifact
+  #      uses: actions/download-artifact@v4
+  #      with:
+  #        name: flutter-web-build
+  #        path: frontend/build/web
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: GitHubActions-Deploy-Prod-${{ github.run_id }}
+  #    - name: Configure AWS credentials
+  #      uses: aws-actions/configure-aws-credentials@v4
+  #      with:
+  #        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+  #        aws-region: ${{ env.AWS_REGION }}
+  #        role-session-name: GitHubActions-Deploy-Prod-${{ github.run_id }}
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.5.0
+  #    - name: Set up Terraform
+  #      uses: hashicorp/setup-terraform@v3
+  #      with:
+  #        terraform_version: 1.5.0
 
-      - name: Terraform Init
-        run: |
-          cd terraform/infra
-          terraform init -backend-config="backend-prod.hcl"
+  #    - name: Terraform Init
+  #      run: |
+  #        cd terraform/infra
+  #        terraform init -backend-config="backend-prod.hcl"
 
-      - name: Terraform Plan
-        run: |
-          cd terraform/infra
-          terraform plan -out=tfplan -var-file="terraform-prod.tfvars"
+  #    - name: Terraform Plan
+  #      run: |
+  #        cd terraform/infra
+  #        terraform plan -out=tfplan -var-file="terraform-prod.tfvars"
 
-      - name: Terraform Apply
-        run: |
-          cd terraform/infra
-          terraform apply -auto-approve tfplan
+  #    - name: Terraform Apply
+  #      run: |
+  #        cd terraform/infra
+  #        terraform apply -auto-approve tfplan
 
-      - name: Deploy Frontend to S3
-        run: |
-          BUCKET=$(cd terraform/infra && terraform output -raw frontend_s3_bucket)
-          aws s3 sync frontend/build/web/ s3://$BUCKET/ --delete
+  #    - name: Deploy Frontend to S3
+  #      run: |
+  #        BUCKET=$(cd terraform/infra && terraform output -raw frontend_s3_bucket)
+  #        aws s3 sync frontend/build/web/ s3://$BUCKET/ --delete
 
-      - name: Invalidate CloudFront cache
-        run: |
-          DIST_ID=$(cd terraform/infra && terraform output -raw cloudfront_distribution_id)
-          aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/*"
+  #    - name: Invalidate CloudFront cache
+  #      run: |
+  #        DIST_ID=$(cd terraform/infra && terraform output -raw cloudfront_distribution_id)
+  #        aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/*"
 
   # Notify on failure
   notify-failure:
