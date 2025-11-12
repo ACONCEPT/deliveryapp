@@ -128,7 +128,7 @@ void exampleCreateMenu() {
     'size': 'large',
     'toppings': ['cheese', 'pepperoni'],
   };
-  final totalPrice = pizza.calculatePrice(selectedOptions);
+  final totalPrice = pizza.calculatePrice(selectedCustomizations: selectedOptions);
   print('Pizza with large size and 2 toppings: \$${totalPrice.toStringAsFixed(2)}');
 }
 
@@ -370,7 +370,7 @@ void exampleComplexCustomization() {
     'instructions': 'Extra sauce please',
   };
 
-  final totalPrice = item.calculatePrice(selections);
+  final totalPrice = item.calculatePrice(selectedCustomizations: selections);
   print('Build Your Own Bowl:');
   print('  Base: Quinoa (+\$1.00)');
   print('  Protein: Shrimp (+\$3.00)');

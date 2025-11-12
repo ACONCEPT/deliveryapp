@@ -198,7 +198,7 @@ void main() {
       );
 
       final selectedOptions = {'size': 'large'};
-      final finalPrice = item.calculatePrice(selectedOptions);
+      final finalPrice = item.calculatePrice(selectedCustomizations: selectedOptions);
       expect(finalPrice, 12.0);
     });
 
@@ -224,7 +224,7 @@ void main() {
       final selectedOptions = {
         'toppings': ['cheese', 'pepperoni']
       };
-      final finalPrice = item.calculatePrice(selectedOptions);
+      final finalPrice = item.calculatePrice(selectedCustomizations: selectedOptions);
       expect(finalPrice, 12.5);
     });
 
@@ -237,7 +237,7 @@ void main() {
       );
 
       final selectedOptions = <String, dynamic>{};
-      final finalPrice = item.calculatePrice(selectedOptions);
+      final finalPrice = item.calculatePrice(selectedCustomizations: selectedOptions);
       expect(finalPrice, 8.0);
     });
   });
@@ -408,7 +408,7 @@ void main() {
       expect(customization.choices!.length, 2);
 
       // Test price calculation
-      final priceWithCheese = item.calculatePrice({'cheese': 'yes'});
+      final priceWithCheese = item.calculatePrice(selectedCustomizations: {'cheese': 'yes'});
       expect(priceWithCheese, 6.99);
 
       // Test JSON round trip

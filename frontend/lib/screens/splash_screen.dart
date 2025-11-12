@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:provider/provider.dart';
 import 'dart:developer' as developer;
 import '../providers/auth_provider.dart';
 import 'login_screen.dart';
 import 'confirmation_screen.dart';
 
 /// Splash screen that checks for existing authentication on app startup
-class SplashScreen extends ConsumerStatefulWidget {
+class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  ConsumerState<SplashScreen> createState() => _SplashScreenState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends ConsumerState<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
@@ -22,15 +22,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authProvider);
+    final authState = Provider.of<AuthProvider>(context);
 
     developer.log(
-      'SplashScreen build - isAuthenticated: ${authState.isAuthenticated}, isLoading: ${authState.isLoading}',
+      'SplashScreen build - isAuthenticated: ${authState.isAuthenticated}, isInitialized: ${authState.isInitialized}',
       name: 'SplashScreen',
     );
 
     // Show splash screen while loading
-    if (authState.isLoading) {
+    if (!authState.isInitialized) {
       return Scaffold(
         body: Center(
           child: Column(

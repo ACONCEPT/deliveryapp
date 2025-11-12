@@ -25,9 +25,9 @@ class _MenuItemFormScreenState extends State<MenuItemFormScreen> with FormStateM
   void initState() {
     super.initState();
     // Initialize text controllers using mixin
-    createController('name', widget.item?.name ?? '');
-    createController('description', widget.item?.description ?? '');
-    createController('price', widget.item != null ? widget.item!.price.toStringAsFixed(2) : '');
+    createController('name', initialValue: widget.item?.name ?? '');
+    createController('description', initialValue: widget.item?.description ?? '');
+    createController('price', initialValue: widget.item != null ? widget.item!.price.toStringAsFixed(2) : '');
 
     _isActive = widget.item?.isActive ?? true;
     _isAvailable = widget.item?.isAvailable ?? true;
@@ -90,7 +90,7 @@ class _MenuItemFormScreenState extends State<MenuItemFormScreen> with FormStateM
 
             // Item name
             TextFormField(
-              controller: getController('name'),
+              controller: controller('name'),
               decoration: const InputDecoration(
                 labelText: 'Item Name',
                 hintText: 'e.g., Margherita Pizza, Caesar Salad',
@@ -115,7 +115,7 @@ class _MenuItemFormScreenState extends State<MenuItemFormScreen> with FormStateM
 
             // Description
             TextFormField(
-              controller: getController('description'),
+              controller: controller('description'),
               decoration: const InputDecoration(
                 labelText: 'Description',
                 hintText: 'Brief description of the item',
@@ -137,7 +137,7 @@ class _MenuItemFormScreenState extends State<MenuItemFormScreen> with FormStateM
 
             // Price
             TextFormField(
-              controller: getController('price'),
+              controller: controller('price'),
               decoration: const InputDecoration(
                 labelText: 'Price',
                 hintText: '9.99',
@@ -219,7 +219,7 @@ class _MenuItemFormScreenState extends State<MenuItemFormScreen> with FormStateM
 
             // Save button (using mixin's buildLoadingButton)
             buildLoadingButton(
-              text: _isEditMode ? 'Update Item' : 'Add Item',
+              label: _isEditMode ? 'Update Item' : 'Add Item',
               onPressed: _save,
             ),
             const SizedBox(height: 8),
