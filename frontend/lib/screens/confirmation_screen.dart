@@ -147,7 +147,7 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
     return SingleChildScrollView(
       child: Center(
         child: Padding(
-          padding: const EdgeInsets.all(DashboardConstants.screenPadding),
+          padding: EdgeInsets.all(DashboardConstants.responsiveScreenPadding(context)),
           child: Column(
             children: [
               _buildDashboardWidgetsCard(),
@@ -332,15 +332,15 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
         borderRadius: BorderRadius.circular(DashboardConstants.cardBorderRadius),
       ),
       child: Container(
-        padding: const EdgeInsets.all(DashboardConstants.cardPadding),
+        padding: EdgeInsets.all(DashboardConstants.responsiveCardPadding(context)),
         child: GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: DashboardConstants.dashboardGridColumns,
-            crossAxisSpacing: DashboardConstants.gridSpacing,
-            mainAxisSpacing: DashboardConstants.gridSpacing,
-            childAspectRatio: DashboardConstants.dashboardCardAspectRatio,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: DashboardConstants.responsiveGridColumns(context),
+            crossAxisSpacing: DashboardConstants.responsiveGridSpacing(context),
+            mainAxisSpacing: DashboardConstants.responsiveGridSpacing(context),
+            childAspectRatio: DashboardConstants.responsiveDashboardCardAspectRatio(context),
           ),
           itemCount: widgets.length,
           itemBuilder: (context, index) {
@@ -360,7 +360,7 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
   List<Widget> _buildCustomerSections() {
     if (_isLoadingRestaurants) {
       return [
-        const SizedBox(height: DashboardConstants.sectionSpacing),
+        SizedBox(height: DashboardConstants.responsiveSectionSpacing(context)),
         const Card(
           child: Padding(
             padding: EdgeInsets.all(24.0),
@@ -377,7 +377,7 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
     }
 
     return [
-      const SizedBox(height: DashboardConstants.sectionSpacing),
+      SizedBox(height: DashboardConstants.responsiveSectionSpacing(context)),
       RestaurantSection(
         title: 'Featured Restaurants',
         headerIcon: Icons.restaurant,
@@ -391,7 +391,7 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
   List<Widget> _buildVendorSections() {
     if (_isLoadingRestaurants) {
       return [
-        const SizedBox(height: DashboardConstants.sectionSpacing),
+        SizedBox(height: DashboardConstants.responsiveSectionSpacing(context)),
         const Card(
           child: Padding(
             padding: EdgeInsets.all(24.0),
@@ -408,7 +408,7 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
     }
 
     return [
-      const SizedBox(height: DashboardConstants.sectionSpacing),
+      SizedBox(height: DashboardConstants.responsiveSectionSpacing(context)),
       RestaurantSection(
         title: 'My Restaurants',
         headerIcon: Icons.store,

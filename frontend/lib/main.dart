@@ -81,9 +81,19 @@ class DeliveryApp extends StatelessWidget {
             seedColor: Colors.deepOrange,
             brightness: Brightness.light,
           ),
+          // Input field theme with mobile-friendly defaults
           inputDecorationTheme: InputDecorationTheme(
             filled: true,
             fillColor: Colors.grey[100],
+            // Add default content padding for better touch targets
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16, // Ensures minimum 48dp touch target
+            ),
+            // Add constraints for minimum height (Material Design guideline)
+            constraints: const BoxConstraints(
+              minHeight: 48, // Minimum touch target size
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -97,11 +107,22 @@ class DeliveryApp extends StatelessWidget {
               borderSide: const BorderSide(color: Colors.deepOrange, width: 2),
             ),
           ),
+          // Text theme with mobile-optimized font sizes
+          textTheme: const TextTheme(
+            // Default text style for body text and input fields
+            bodyLarge: TextStyle(fontSize: 16), // Prevents iOS auto-zoom
+            bodyMedium: TextStyle(fontSize: 16), // Prevents iOS auto-zoom
+            bodySmall: TextStyle(fontSize: 14),
+            // Input field text style
+            titleMedium: TextStyle(fontSize: 16), // Used by TextFormField
+          ),
           elevatedButtonTheme: ElevatedButtonThemeData(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.deepOrange,
               foregroundColor: Colors.white,
+              // Increased padding for better touch targets on mobile
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              minimumSize: const Size(88, 48), // Material Design minimum
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),

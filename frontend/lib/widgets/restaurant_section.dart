@@ -29,7 +29,7 @@ class RestaurantSection extends StatelessWidget {
       ),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(DashboardConstants.cardPadding),
+        padding: EdgeInsets.all(DashboardConstants.responsiveCardPadding(context)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -42,11 +42,11 @@ class RestaurantSection extends StatelessWidget {
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: DashboardConstants.dashboardGridColumns,
-                crossAxisSpacing: DashboardConstants.gridSpacing,
-                mainAxisSpacing: DashboardConstants.gridSpacing,
-                childAspectRatio: DashboardConstants.restaurantCardAspectRatio,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: DashboardConstants.responsiveGridColumns(context),
+                crossAxisSpacing: DashboardConstants.responsiveGridSpacing(context),
+                mainAxisSpacing: DashboardConstants.responsiveGridSpacing(context),
+                childAspectRatio: DashboardConstants.responsiveRestaurantCardAspectRatio(context),
               ),
               itemCount: restaurants.length,
               itemBuilder: (context, index) {

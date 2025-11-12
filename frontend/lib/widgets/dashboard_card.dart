@@ -17,6 +17,8 @@ class DashboardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = DashboardConstants.isMobile(context);
+
     return Card(
       elevation: DashboardConstants.cardElevationSmall,
       shape: RoundedRectangleBorder(
@@ -25,26 +27,29 @@ class DashboardCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(DashboardConstants.cardBorderRadiusSmall),
-        child: Container(
-          padding: const EdgeInsets.all(DashboardConstants.cardPaddingSmall),
+        child: Padding(
+          padding: EdgeInsets.all(DashboardConstants.responsiveCardPaddingSmall(context)),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Icon(
                 icon,
-                size: DashboardConstants.dashboardIconSize,
+                size: DashboardConstants.responsiveDashboardIconSize(context),
                 color: color,
               ),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: DashboardConstants.dashboardCardTextSize,
-                  fontWeight: FontWeight.w600,
+              SizedBox(height: isMobile ? 6 : 8),
+              Flexible(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: DashboardConstants.responsiveDashboardCardTextSize(context),
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: DashboardConstants.restaurantCardMaxLines,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                textAlign: TextAlign.center,
-                maxLines: DashboardConstants.restaurantCardMaxLines,
-                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

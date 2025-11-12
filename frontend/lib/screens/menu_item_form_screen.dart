@@ -146,7 +146,7 @@ class _MenuItemFormScreenState extends State<MenuItemFormScreen> with FormStateM
               ),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
               ],
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {

@@ -1,0 +1,320 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+
+permissions:
+  id-token: write   # Required for OIDC authentication with AWS
+  contents: read    # Required for checkout
+
+env:
+  AWS_REGION: us-east-1
+  GO_VERSION: '1.21'
+  FLUTTER_VERSION: '3.24.0'
+
+jobs:
+  # Backend Tests
+  #backend-test:
+  #  name: Backend Tests
+  #  runs-on: ubuntu-latest
+
+  #  steps:
+  #    - name: Checkout code
+  #      uses: actions/checkout@v4
+
+  #    - name: Set up Go
+  #      uses: actions/setup-go@v5
+  #      with:
+  #        go-version: ${{ env.GO_VERSION }}
+  #        cache: true
+  #        cache-dependency-path: backend/go.sum
+
+  #    - name: Download dependencies
+  #      run: cd backend && go mod download
+
+  #    - name: Run tests
+  #      run: cd backend && go test ./... -v -race -coverprofile=coverage.out
+
+  #    - name: Upload coverage
+  #      uses: codecov/codecov-action@v4
+  #      if: github.event_name == 'push'
+  #      with:
+  #        files: ./backend/coverage.out
+  #        flags: backend
+  #        fail_ci_if_error: false
+
+  # Backend Build
+  backend-build:
+    name: Build Backend Lambda
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build Lambda deployment package
+        run: ./tools/sh/build-lambda.sh
+
+      - name: Upload Lambda artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-deployment
+          path: build/lambda-deployment.zip
+          retention-days: 7
+
+      - name: Upload Jobs Lambda artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-jobs-deployment
+          path: build/lambda-jobs-deployment-*.zip
+          retention-days: 7
+
+  # Frontend Tests
+  #frontend-test:
+  #  name: Frontend Tests
+  #  runs-on: ubuntu-latest
+
+  #  steps:
+  #    - name: Checkout code
+  #      uses: actions/checkout@v4
+
+  #    - name: Set up Flutter
+  #      uses: subosito/flutter-action@v2
+  #      with:
+  #        flutter-version: ${{ env.FLUTTER_VERSION }}
+  #        channel: 'stable'
+  #        cache: true
+
+  #    - name: Install dependencies
+  #      run: cd frontend && flutter pub get
+
+  #    - name: Analyze code
+  #      run: cd frontend && flutter analyze --no-fatal-infos
+
+  #    - name: Run tests
+  #      run: cd frontend && flutter test --coverage
+
+  #    - name: Upload coverage
+  #      uses: codecov/codecov-action@v4
+  #      if: github.event_name == 'push'
+  #      with:
+  #        files: ./frontend/coverage/lcov.info
+  #        flags: frontend
+  #        fail_ci_if_error: false
+
+  # Frontend Build
+  frontend-build:
+    name: Build Flutter Web
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: cd frontend && flutter pub get
+
+      - name: Build web release
+        run: cd frontend && flutter build web --release --web-renderer canvaskit
+
+      - name: Upload web build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-web-build
+          path: frontend/build/web
+          retention-days: 7
+
+  # Deploy to Development (auto on develop branch)
+  deploy-dev:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    needs: [backend-build, frontend-build]
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment:
+      name: development
+      url: https://d1b8hnq3oepzhd.cloudfront.net
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Lambda artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-deployment
+          path: build/
+
+      - name: Download Jobs artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-jobs-deployment
+          path: build/
+
+      - name: Download Frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: flutter-web-build
+          path: frontend/build/web
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Deploy-${{ github.run_id }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+
+      - name: Terraform Init
+        run: |
+          cd terraform/infra
+          terraform init -backend-config="backend.hcl"
+
+      - name: Terraform Plan
+        run: |
+          cd terraform/infra
+          terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        run: |
+          cd terraform/infra
+          terraform apply -auto-approve tfplan
+
+      - name: Get outputs
+        id: tf-outputs
+        run: |
+          cd terraform/infra
+          echo "cloudfront_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
+          echo "s3_bucket=$(terraform output -raw frontend_s3_bucket)" >> $GITHUB_OUTPUT
+
+      - name: Deploy Frontend to S3
+        run: |
+          aws s3 sync frontend/build/web/ s3://${{ steps.tf-outputs.outputs.s3_bucket }}/ \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable" \
+            --exclude "index.html" \
+            --exclude "flutter_service_worker.js"
+
+          # Upload index.html with no-cache
+          aws s3 cp frontend/build/web/index.html s3://${{ steps.tf-outputs.outputs.s3_bucket }}/index.html \
+            --cache-control "public, max-age=0, must-revalidate"
+
+          # Upload service worker with no-cache
+          aws s3 cp frontend/build/web/flutter_service_worker.js s3://${{ steps.tf-outputs.outputs.s3_bucket }}/flutter_service_worker.js \
+            --cache-control "public, max-age=0, must-revalidate"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ steps.tf-outputs.outputs.cloudfront_id }} \
+            --paths "/*"
+
+      - name: Run database migrations
+        run: |
+          aws lambda invoke \
+            --function-name delivery-app-migrate-dev \
+            --payload '{"action":"migrate"}' \
+            --region ${{ env.AWS_REGION }} \
+            /tmp/migrate-response.json
+          cat /tmp/migrate-response.json
+
+  # Deploy to Production (manual approval required)
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [backend-build, frontend-build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: https://your-production-domain.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Lambda artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-deployment
+          path: build/
+
+      - name: Download Jobs artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-jobs-deployment
+          path: build/
+
+      - name: Download Frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: flutter-web-build
+          path: frontend/build/web
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Deploy-Prod-${{ github.run_id }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+
+      - name: Terraform Init
+        run: |
+          cd terraform/infra
+          terraform init -backend-config="backend-prod.hcl"
+
+      - name: Terraform Plan
+        run: |
+          cd terraform/infra
+          terraform plan -out=tfplan -var-file="terraform-prod.tfvars"
+
+      - name: Terraform Apply
+        run: |
+          cd terraform/infra
+          terraform apply -auto-approve tfplan
+
+      - name: Deploy Frontend to S3
+        run: |
+          BUCKET=$(cd terraform/infra && terraform output -raw frontend_s3_bucket)
+          aws s3 sync frontend/build/web/ s3://$BUCKET/ --delete
+
+      - name: Invalidate CloudFront cache
+        run: |
+          DIST_ID=$(cd terraform/infra && terraform output -raw cloudfront_distribution_id)
+          aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/*"
+
+  # Notify on failure
+  notify-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [backend-build, frontend-build]
+    if: failure()
+
+    steps:
+      - name: Send failure notification
+        run: |
+          echo "❌ CI/CD Pipeline failed!"
+          echo "Branch: ${{ github.ref }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Author: ${{ github.actor }}"
+          # Add Slack/Discord webhook here if desired

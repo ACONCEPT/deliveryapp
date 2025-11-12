@@ -20,7 +20,7 @@ class SectionHeader extends StatelessWidget {
         Icon(
           icon,
           color: iconColor,
-          size: DashboardConstants.sectionHeaderIconSize,
+          size: DashboardConstants.responsiveSectionHeaderIconSize(context),
         ),
         const SizedBox(width: 8),
         Text(

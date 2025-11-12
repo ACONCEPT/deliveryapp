@@ -1,0 +1,21 @@
+# AWS Configuration
+aws_region   = "us-east-1"
+environment  = "dev"
+project_name = "delivery-app"
+
+# GitHub Configuration
+# REQUIRED: Set your GitHub organization or username
+github_org  = "your-github-username"
+github_repo = "delivery_app"
+
+# Allowed branches that can deploy via GitHub Actions
+github_branches = ["main", "develop"]
+
+# Permissions Configuration
+# Enable/disable specific deployment capabilities
+enable_lambda_deployment        = true
+enable_s3_deployment           = true
+enable_cloudfront_invalidation = true
+enable_migration_lambda        = true
+enable_ecr_push                = false
+enable_terraform_state_read    = true
