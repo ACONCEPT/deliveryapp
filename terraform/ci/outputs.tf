@@ -37,6 +37,7 @@ output "enabled_permissions" {
     migration_lambda         = var.enable_migration_lambda
     ecr_push                 = var.enable_ecr_push
     terraform_state_read     = var.enable_terraform_state_read
+    terraform_infrastructure = var.enable_terraform_infrastructure
   }
 }
 
@@ -91,7 +92,8 @@ output "github_actions_setup_instructions" {
      - CloudFront Invalidation: ${var.enable_cloudfront_invalidation}
      - Migration Lambda Invocation: ${var.enable_migration_lambda}
      - ECR Push: ${var.enable_ecr_push}
-     - Terraform State Read: ${var.enable_terraform_state_read}
+     - Terraform State Management: ${var.enable_terraform_state_read}
+     - Terraform Infrastructure Management: ${var.enable_terraform_infrastructure}
 
   4. ALLOWED BRANCHES:
      ${join("\n     ", [for branch in var.github_branches : "- ${branch}"])}

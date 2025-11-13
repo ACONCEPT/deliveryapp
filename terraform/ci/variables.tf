@@ -71,3 +71,9 @@ variable "enable_terraform_state_read" {
   type        = bool
   default     = true
 }
+
+variable "enable_terraform_infrastructure" {
+  description = "Allow GitHub Actions to manage infrastructure via Terraform"
+  type        = bool
+  default     = true
+}

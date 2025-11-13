@@ -10,11 +10,11 @@ resource "aws_iam_openid_connect_provider" "github" {
     "sts.amazonaws.com"
   ]
 
-  # GitHub's OIDC thumbprints
-  # These are the SHA1 fingerprints of the root CA certificates used by GitHub
+  # GitHub's OIDC thumbprints (updated as of 2023)
+  # Primary thumbprint from GitHub's current certificate chain
   thumbprint_list = [
-    "6938fd4d98bab03faadb97b34396831e3780aea1",
-    "1c58a3a8518e8759bf075b76b750d4f2df264fcd"
+    "1b511abead59c6ce207077c0bf0e0043b1382612",  # Current GitHub Actions OIDC thumbprint
+    "6938fd4d98bab03faadb97b34396831e3780aea1"   # Legacy thumbprint for backwards compatibility
   ]
 
   tags = {
@@ -41,11 +41,17 @@ resource "aws_iam_role" "github_actions" {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
           }
           StringLike = {
-            # Allow assuming role from specific repo and branches
-            "token.actions.githubusercontent.com:sub" = [
-              for branch in var.github_branches :
-              "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/${branch}"
-            ]
+            # Allow assuming role from specific repo, branches, and environments
+            "token.actions.githubusercontent.com:sub" = concat(
+              [
+                for branch in var.github_branches :
+                "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/${branch}"
+              ],
+              [
+                # Allow GitHub environments
+                "repo:${var.github_org}/${var.github_repo}:environment:*"
+              ]
+            )
           }
         }
       }
@@ -232,11 +238,11 @@ resource "aws_iam_role_policy_attachment" "ecr_push" {
   policy_arn = aws_iam_policy.ecr_push[0].arn
 }
 
-# IAM Policy for Terraform State Read Access
+# IAM Policy for Terraform State Management
 resource "aws_iam_policy" "terraform_state_read" {
   count       = var.enable_terraform_state_read ? 1 : 0
   name        = "${var.project_name}-github-terraform-state-read-${var.environment}"
-  description = "Allow GitHub Actions to read Terraform state for deployment info"
+  description = "Allow GitHub Actions to manage Terraform state and locking"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -245,6 +251,8 @@ resource "aws_iam_policy" "terraform_state_read" {
         Effect = "Allow"
         Action = [
           "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
           "s3:ListBucket"
         ]
         Resource = [
@@ -257,7 +265,8 @@ resource "aws_iam_policy" "terraform_state_read" {
         Action = [
           "dynamodb:GetItem",
           "dynamodb:PutItem",
-          "dynamodb:DeleteItem"
+          "dynamodb:DeleteItem",
+          "dynamodb:DescribeTable"
         ]
         Resource = [
           "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.project_name}-terraform-locks-${var.environment}"
@@ -271,4 +280,251 @@ resource "aws_iam_role_policy_attachment" "terraform_state_read" {
   count      = var.enable_terraform_state_read ? 1 : 0
   role       = aws_iam_role.github_actions.name
   policy_arn = aws_iam_policy.terraform_state_read[0].arn
+}
+
+# IAM Policy for Terraform Infrastructure Management
+resource "aws_iam_policy" "terraform_infrastructure" {
+  count       = var.enable_terraform_infrastructure ? 1 : 0
+  name        = "${var.project_name}-github-terraform-infra-${var.environment}"
+  description = "Allow GitHub Actions to manage infrastructure via Terraform"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      # Lambda permissions
+      {
+        Effect = "Allow"
+        Action = [
+          "lambda:CreateFunction",
+          "lambda:DeleteFunction",
+          "lambda:GetFunction",
+          "lambda:GetFunctionConfiguration",
+          "lambda:UpdateFunctionCode",
+          "lambda:UpdateFunctionConfiguration",
+          "lambda:ListFunctions",
+          "lambda:ListTags",
+          "lambda:TagResource",
+          "lambda:UntagResource",
+          "lambda:PublishVersion",
+          "lambda:CreateAlias",
+          "lambda:DeleteAlias",
+          "lambda:GetAlias",
+          "lambda:UpdateAlias",
+          "lambda:AddPermission",
+          "lambda:RemovePermission",
+          "lambda:GetPolicy"
+        ]
+        Resource = [
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${var.project_name}-*-${var.environment}"
+        ]
+      },
+      # IAM Role permissions for Lambda execution roles
+      {
+        Effect = "Allow"
+        Action = [
+          "iam:GetRole",
+          "iam:GetRolePolicy",
+          "iam:ListRolePolicies",
+          "iam:ListAttachedRolePolicies",
+          "iam:CreateRole",
+          "iam:DeleteRole",
+          "iam:PutRolePolicy",
+          "iam:DeleteRolePolicy",
+          "iam:AttachRolePolicy",
+          "iam:DetachRolePolicy",
+          "iam:PassRole",
+          "iam:TagRole",
+          "iam:UntagRole"
+        ]
+        Resource = [
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-*-${var.environment}"
+        ]
+      },
+      # IAM Policy permissions
+      {
+        Effect = "Allow"
+        Action = [
+          "iam:GetPolicy",
+          "iam:GetPolicyVersion",
+          "iam:ListPolicyVersions",
+          "iam:CreatePolicy",
+          "iam:DeletePolicy",
+          "iam:CreatePolicyVersion",
+          "iam:DeletePolicyVersion",
+          "iam:TagPolicy",
+          "iam:UntagPolicy"
+        ]
+        Resource = [
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.project_name}-*-${var.environment}"
+        ]
+      },
+      # API Gateway permissions
+      {
+        Effect = "Allow"
+        Action = [
+          "apigateway:*"
+        ]
+        Resource = [
+          "arn:aws:apigateway:${var.aws_region}::/restapis",
+          "arn:aws:apigateway:${var.aws_region}::/restapis/*"
+        ]
+      },
+      # S3 permissions for frontend and other buckets
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:CreateBucket",
+          "s3:DeleteBucket",
+          "s3:GetBucketLocation",
+          "s3:GetBucketPolicy",
+          "s3:PutBucketPolicy",
+          "s3:DeleteBucketPolicy",
+          "s3:GetBucketAcl",
+          "s3:PutBucketAcl",
+          "s3:GetBucketCORS",
+          "s3:PutBucketCORS",
+          "s3:GetBucketWebsite",
+          "s3:PutBucketWebsite",
+          "s3:DeleteBucketWebsite",
+          "s3:GetBucketVersioning",
+          "s3:PutBucketVersioning",
+          "s3:GetBucketPublicAccessBlock",
+          "s3:PutBucketPublicAccessBlock",
+          "s3:GetBucketTagging",
+          "s3:PutBucketTagging",
+          "s3:GetEncryptionConfiguration",
+          "s3:PutEncryptionConfiguration",
+          "s3:GetLifecycleConfiguration",
+          "s3:PutLifecycleConfiguration",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          "arn:aws:s3:::${var.project_name}-*-${var.environment}-${data.aws_caller_identity.current.account_id}"
+        ]
+      },
+      # CloudFront permissions
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudfront:CreateDistribution",
+          "cloudfront:GetDistribution",
+          "cloudfront:GetDistributionConfig",
+          "cloudfront:UpdateDistribution",
+          "cloudfront:DeleteDistribution",
+          "cloudfront:TagResource",
+          "cloudfront:UntagResource",
+          "cloudfront:ListTagsForResource",
+          "cloudfront:CreateOriginAccessControl",
+          "cloudfront:GetOriginAccessControl",
+          "cloudfront:DeleteOriginAccessControl"
+        ]
+        Resource = "*"
+      },
+      # RDS permissions
+      {
+        Effect = "Allow"
+        Action = [
+          "rds:DescribeDBInstances",
+          "rds:DescribeDBSubnetGroups",
+          "rds:CreateDBInstance",
+          "rds:ModifyDBInstance",
+          "rds:DeleteDBInstance",
+          "rds:CreateDBSubnetGroup",
+          "rds:DeleteDBSubnetGroup",
+          "rds:AddTagsToResource",
+          "rds:ListTagsForResource",
+          "rds:RemoveTagsFromResource"
+        ]
+        Resource = [
+          "arn:aws:rds:${var.aws_region}:${data.aws_caller_identity.current.account_id}:db:${var.project_name}-*-${var.environment}",
+          "arn:aws:rds:${var.aws_region}:${data.aws_caller_identity.current.account_id}:subgrp:${var.project_name}-*-${var.environment}"
+        ]
+      },
+      # VPC permissions
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeVpcs",
+          "ec2:DescribeSubnets",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeSecurityGroupRules",
+          "ec2:DescribeRouteTables",
+          "ec2:DescribeInternetGateways",
+          "ec2:DescribeNatGateways",
+          "ec2:DescribeAddresses",
+          "ec2:CreateVpc",
+          "ec2:CreateSubnet",
+          "ec2:CreateSecurityGroup",
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:AuthorizeSecurityGroupEgress",
+          "ec2:RevokeSecurityGroupIngress",
+          "ec2:RevokeSecurityGroupEgress",
+          "ec2:CreateRouteTable",
+          "ec2:CreateRoute",
+          "ec2:AssociateRouteTable",
+          "ec2:CreateInternetGateway",
+          "ec2:AttachInternetGateway",
+          "ec2:AllocateAddress",
+          "ec2:CreateNatGateway",
+          "ec2:CreateTags",
+          "ec2:DeleteTags",
+          "ec2:ModifyVpcAttribute",
+          "ec2:ModifySubnetAttribute",
+          "ec2:DeleteVpc",
+          "ec2:DeleteSubnet",
+          "ec2:DeleteSecurityGroup",
+          "ec2:DeleteRouteTable",
+          "ec2:DeleteRoute",
+          "ec2:DisassociateRouteTable",
+          "ec2:DeleteInternetGateway",
+          "ec2:DetachInternetGateway",
+          "ec2:ReleaseAddress",
+          "ec2:DeleteNatGateway"
+        ]
+        Resource = "*"
+      },
+      # CloudWatch Logs permissions
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:DeleteLogGroup",
+          "logs:DescribeLogGroups",
+          "logs:PutRetentionPolicy",
+          "logs:TagLogGroup",
+          "logs:UntagLogGroup",
+          "logs:ListTagsLogGroup"
+        ]
+        Resource = [
+          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.project_name}-*-${var.environment}",
+          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.project_name}-*-${var.environment}:*"
+        ]
+      },
+      # Secrets Manager permissions
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret",
+          "secretsmanager:CreateSecret",
+          "secretsmanager:UpdateSecret",
+          "secretsmanager:DeleteSecret",
+          "secretsmanager:TagResource",
+          "secretsmanager:UntagResource",
+          "secretsmanager:PutSecretValue",
+          "secretsmanager:GetResourcePolicy",
+          "secretsmanager:PutResourcePolicy"
+        ]
+        Resource = [
+          "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "terraform_infrastructure" {
+  count      = var.enable_terraform_infrastructure ? 1 : 0
+  role       = aws_iam_role.github_actions.name
+  policy_arn = aws_iam_policy.terraform_infrastructure[0].arn
 }
