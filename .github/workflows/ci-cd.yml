@@ -11,7 +11,7 @@ permissions:
 env:
   AWS_REGION: us-east-1
   GO_VERSION: '1.21'
-  FLUTTER_VERSION: '3.24.0'
+  FLUTTER_VERSION: '3.35.6'
   TERRAFORM_VERSION: '1.5.0'
 
 jobs:
