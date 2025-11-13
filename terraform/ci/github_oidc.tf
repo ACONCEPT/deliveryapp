@@ -322,13 +322,9 @@ resource "aws_iam_policy" "terraform_infrastructure" {
         Resource = "*"
       },
       {
-        Effect = "Allow"
-        Action = ["rds:*"]
-        Resource = [
-          "arn:aws:rds:${var.aws_region}:${data.aws_caller_identity.current.account_id}:db:${var.project_name}-*-${var.environment}",
-          "arn:aws:rds:${var.aws_region}:${data.aws_caller_identity.current.account_id}:subgrp:${var.project_name}-*-${var.environment}",
-          "arn:aws:rds:${var.aws_region}:${data.aws_caller_identity.current.account_id}:pg:${var.project_name}-*-${var.environment}"
-        ]
+        Effect   = "Allow"
+        Action   = ["rds:*"]
+        Resource = "*"
       },
       {
         Effect   = "Allow"
@@ -336,12 +332,9 @@ resource "aws_iam_policy" "terraform_infrastructure" {
         Resource = "*"
       },
       {
-        Effect = "Allow"
-        Action = ["logs:*"]
-        Resource = [
-          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.project_name}-*-${var.environment}*",
-          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/apigateway/${var.project_name}-*"
-        ]
+        Effect   = "Allow"
+        Action   = ["logs:*"]
+        Resource = "*"
       },
       {
         Effect   = "Allow"
