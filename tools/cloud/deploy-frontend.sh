@@ -41,9 +41,20 @@ echo "API Gateway URL: $API_GATEWAY_URL"
 echo -e "${GREEN}✓ Configuration retrieved${NC}"
 echo ""
 
-# Step 2: Build Flutter Web App with API configuration
-echo -e "${YELLOW}Step 2: Building Flutter web application with production API configuration...${NC}"
+# Step 2: Get Flutter dependencies
+echo -e "${YELLOW}Step 2: Getting Flutter dependencies...${NC}"
 cd "$FRONTEND_DIR"
+flutter pub get
+
+if [ $? -ne 0 ]; then
+    echo "Error: Flutter pub get failed"
+    exit 1
+fi
+echo -e "${GREEN}✓ Dependencies installed${NC}"
+echo ""
+
+# Step 3: Build Flutter Web App with API configuration
+echo -e "${YELLOW}Step 3: Building Flutter web application with production API configuration...${NC}"
 flutter build web --release --dart-define=API_BASE_URL="$API_GATEWAY_URL"
 
 if [ $? -ne 0 ]; then
@@ -53,8 +64,8 @@ fi
 echo -e "${GREEN}✓ Flutter build completed with API_BASE_URL=$API_GATEWAY_URL${NC}"
 echo ""
 
-# Step 3: Upload files to S3
-echo -e "${YELLOW}Step 3: Uploading files to S3...${NC}"
+# Step 4: Upload files to S3
+echo -e "${YELLOW}Step 4: Uploading files to S3...${NC}"
 aws s3 sync "$FRONTEND_DIR/build/web/" "s3://$S3_BUCKET/" --delete
 
 if [ $? -ne 0 ]; then
@@ -64,8 +75,8 @@ fi
 echo -e "${GREEN}✓ Files uploaded to S3${NC}"
 echo ""
 
-# Step 4: Invalidate CloudFront cache
-echo -e "${YELLOW}Step 4: Invalidating CloudFront cache...${NC}"
+# Step 5: Invalidate CloudFront cache
+echo -e "${YELLOW}Step 5: Invalidating CloudFront cache...${NC}"
 INVALIDATION_OUTPUT=$(aws cloudfront create-invalidation --distribution-id "$CLOUDFRONT_ID" --paths "/*")
 
 if [ $? -ne 0 ]; then
