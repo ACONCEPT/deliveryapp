@@ -282,242 +282,81 @@ resource "aws_iam_role_policy_attachment" "terraform_state_read" {
   policy_arn = aws_iam_policy.terraform_state_read[0].arn
 }
 
-# IAM Policy for Terraform Infrastructure Management
 resource "aws_iam_policy" "terraform_infrastructure" {
-  count       = var.enable_terraform_infrastructure ? 1 : 0
-  name        = "${var.project_name}-github-terraform-infra-${var.environment}"
-  description = "Allow GitHub Actions to manage infrastructure via Terraform"
-
+  count = var.enable_terraform_infrastructure ? 1 : 0
+  name  = "${var.project_name}-github-terraform-infra-${var.environment}"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # Lambda permissions
       {
         Effect = "Allow"
-        Action = [
-          "lambda:CreateFunction",
-          "lambda:DeleteFunction",
-          "lambda:GetFunction",
-          "lambda:GetFunctionConfiguration",
-          "lambda:UpdateFunctionCode",
-          "lambda:UpdateFunctionConfiguration",
-          "lambda:ListFunctions",
-          "lambda:ListTags",
-          "lambda:TagResource",
-          "lambda:UntagResource",
-          "lambda:PublishVersion",
-          "lambda:CreateAlias",
-          "lambda:DeleteAlias",
-          "lambda:GetAlias",
-          "lambda:UpdateAlias",
-          "lambda:AddPermission",
-          "lambda:RemovePermission",
-          "lambda:GetPolicy"
-        ]
-        Resource = [
-          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${var.project_name}-*-${var.environment}"
-        ]
+        Action = ["lambda:*"]
+        Resource = ["arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${var.project_name}-*-${var.environment}"]
       },
-      # IAM Role permissions for Lambda execution roles
       {
-        Effect = "Allow"
-        Action = [
-          "iam:GetRole",
-          "iam:GetRolePolicy",
-          "iam:ListRolePolicies",
-          "iam:ListAttachedRolePolicies",
-          "iam:CreateRole",
-          "iam:DeleteRole",
-          "iam:PutRolePolicy",
-          "iam:DeleteRolePolicy",
-          "iam:AttachRolePolicy",
-          "iam:DetachRolePolicy",
-          "iam:PassRole",
-          "iam:TagRole",
-          "iam:UntagRole"
-        ]
-        Resource = [
-          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-*-${var.environment}"
-        ]
+        Effect   = "Allow"
+        Action   = ["lambda:GetLayerVersion", "lambda:ListLayers", "lambda:ListLayerVersions"]
+        Resource = "*"
       },
-      # IAM Policy permissions
       {
         Effect = "Allow"
-        Action = [
-          "iam:GetPolicy",
-          "iam:GetPolicyVersion",
-          "iam:ListPolicyVersions",
-          "iam:CreatePolicy",
-          "iam:DeletePolicy",
-          "iam:CreatePolicyVersion",
-          "iam:DeletePolicyVersion",
-          "iam:TagPolicy",
-          "iam:UntagPolicy"
-        ]
+        Action = ["iam:*Role", "iam:*RolePolicy", "iam:GetRole", "iam:GetRolePolicy", "iam:ListRolePolicies", "iam:ListAttachedRolePolicies", "iam:PassRole", "iam:TagRole", "iam:UntagRole", "iam:*Policy", "iam:*PolicyVersion", "iam:GetPolicy", "iam:GetPolicyVersion", "iam:ListPolicyVersions", "iam:TagPolicy", "iam:UntagPolicy"]
         Resource = [
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-*-${var.environment}",
           "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.project_name}-*-${var.environment}"
         ]
       },
-      # API Gateway permissions
       {
-        Effect = "Allow"
-        Action = [
-          "apigateway:*"
-        ]
-        Resource = [
-          "arn:aws:apigateway:${var.aws_region}::/restapis",
-          "arn:aws:apigateway:${var.aws_region}::/restapis/*"
-        ]
+        Effect   = "Allow"
+        Action   = ["apigateway:*"]
+        Resource = ["arn:aws:apigateway:${var.aws_region}::/*"]
       },
-      # S3 permissions for frontend and other buckets
       {
-        Effect = "Allow"
-        Action = [
-          "s3:CreateBucket",
-          "s3:DeleteBucket",
-          "s3:GetBucketLocation",
-          "s3:GetBucketPolicy",
-          "s3:PutBucketPolicy",
-          "s3:DeleteBucketPolicy",
-          "s3:GetBucketAcl",
-          "s3:PutBucketAcl",
-          "s3:GetBucketCORS",
-          "s3:PutBucketCORS",
-          "s3:GetBucketWebsite",
-          "s3:PutBucketWebsite",
-          "s3:DeleteBucketWebsite",
-          "s3:GetBucketVersioning",
-          "s3:PutBucketVersioning",
-          "s3:GetBucketPublicAccessBlock",
-          "s3:PutBucketPublicAccessBlock",
-          "s3:GetBucketTagging",
-          "s3:PutBucketTagging",
-          "s3:GetEncryptionConfiguration",
-          "s3:PutEncryptionConfiguration",
-          "s3:GetLifecycleConfiguration",
-          "s3:PutLifecycleConfiguration",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          "arn:aws:s3:::${var.project_name}-*-${var.environment}-${data.aws_caller_identity.current.account_id}"
-        ]
+        Effect   = "Allow"
+        Action   = ["s3:*"]
+        Resource = ["arn:aws:s3:::${var.project_name}-*-${var.environment}-${data.aws_caller_identity.current.account_id}", "arn:aws:s3:::${var.project_name}-*-${var.environment}-${data.aws_caller_identity.current.account_id}/*"]
       },
-      # CloudFront permissions
       {
-        Effect = "Allow"
-        Action = [
-          "cloudfront:CreateDistribution",
-          "cloudfront:GetDistribution",
-          "cloudfront:GetDistributionConfig",
-          "cloudfront:UpdateDistribution",
-          "cloudfront:DeleteDistribution",
-          "cloudfront:TagResource",
-          "cloudfront:UntagResource",
-          "cloudfront:ListTagsForResource",
-          "cloudfront:CreateOriginAccessControl",
-          "cloudfront:GetOriginAccessControl",
-          "cloudfront:DeleteOriginAccessControl"
-        ]
+        Effect   = "Allow"
+        Action   = ["cloudfront:*"]
         Resource = "*"
       },
-      # RDS permissions
       {
         Effect = "Allow"
-        Action = [
-          "rds:DescribeDBInstances",
-          "rds:DescribeDBSubnetGroups",
-          "rds:CreateDBInstance",
-          "rds:ModifyDBInstance",
-          "rds:DeleteDBInstance",
-          "rds:CreateDBSubnetGroup",
-          "rds:DeleteDBSubnetGroup",
-          "rds:AddTagsToResource",
-          "rds:ListTagsForResource",
-          "rds:RemoveTagsFromResource"
-        ]
+        Action = ["rds:*"]
         Resource = [
           "arn:aws:rds:${var.aws_region}:${data.aws_caller_identity.current.account_id}:db:${var.project_name}-*-${var.environment}",
-          "arn:aws:rds:${var.aws_region}:${data.aws_caller_identity.current.account_id}:subgrp:${var.project_name}-*-${var.environment}"
+          "arn:aws:rds:${var.aws_region}:${data.aws_caller_identity.current.account_id}:subgrp:${var.project_name}-*-${var.environment}",
+          "arn:aws:rds:${var.aws_region}:${data.aws_caller_identity.current.account_id}:pg:${var.project_name}-*-${var.environment}"
         ]
       },
-      # VPC permissions
       {
-        Effect = "Allow"
-        Action = [
-          "ec2:DescribeVpcs",
-          "ec2:DescribeSubnets",
-          "ec2:DescribeSecurityGroups",
-          "ec2:DescribeSecurityGroupRules",
-          "ec2:DescribeRouteTables",
-          "ec2:DescribeInternetGateways",
-          "ec2:DescribeNatGateways",
-          "ec2:DescribeAddresses",
-          "ec2:CreateVpc",
-          "ec2:CreateSubnet",
-          "ec2:CreateSecurityGroup",
-          "ec2:AuthorizeSecurityGroupIngress",
-          "ec2:AuthorizeSecurityGroupEgress",
-          "ec2:RevokeSecurityGroupIngress",
-          "ec2:RevokeSecurityGroupEgress",
-          "ec2:CreateRouteTable",
-          "ec2:CreateRoute",
-          "ec2:AssociateRouteTable",
-          "ec2:CreateInternetGateway",
-          "ec2:AttachInternetGateway",
-          "ec2:AllocateAddress",
-          "ec2:CreateNatGateway",
-          "ec2:CreateTags",
-          "ec2:DeleteTags",
-          "ec2:ModifyVpcAttribute",
-          "ec2:ModifySubnetAttribute",
-          "ec2:DeleteVpc",
-          "ec2:DeleteSubnet",
-          "ec2:DeleteSecurityGroup",
-          "ec2:DeleteRouteTable",
-          "ec2:DeleteRoute",
-          "ec2:DisassociateRouteTable",
-          "ec2:DeleteInternetGateway",
-          "ec2:DetachInternetGateway",
-          "ec2:ReleaseAddress",
-          "ec2:DeleteNatGateway"
-        ]
+        Effect   = "Allow"
+        Action   = ["ec2:*"]
         Resource = "*"
       },
-      # CloudWatch Logs permissions
       {
         Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:DeleteLogGroup",
-          "logs:DescribeLogGroups",
-          "logs:PutRetentionPolicy",
-          "logs:TagLogGroup",
-          "logs:UntagLogGroup",
-          "logs:ListTagsLogGroup"
-        ]
+        Action = ["logs:*"]
         Resource = [
-          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.project_name}-*-${var.environment}",
-          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.project_name}-*-${var.environment}:*"
+          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.project_name}-*-${var.environment}*",
+          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/apigateway/${var.project_name}-*"
         ]
       },
-      # Secrets Manager permissions
       {
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue",
-          "secretsmanager:DescribeSecret",
-          "secretsmanager:CreateSecret",
-          "secretsmanager:UpdateSecret",
-          "secretsmanager:DeleteSecret",
-          "secretsmanager:TagResource",
-          "secretsmanager:UntagResource",
-          "secretsmanager:PutSecretValue",
-          "secretsmanager:GetResourcePolicy",
-          "secretsmanager:PutResourcePolicy"
-        ]
-        Resource = [
-          "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/*"
-        ]
+        Effect   = "Allow"
+        Action   = ["events:*"]
+        Resource = ["arn:aws:events:${var.aws_region}:${data.aws_caller_identity.current.account_id}:rule/${var.project_name}-*-${var.environment}"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:*"]
+        Resource = ["arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/*"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["sts:GetCallerIdentity", "acm:DescribeCertificate", "acm:ListCertificates", "acm:GetCertificate", "acm:ListTagsForCertificate"]
+        Resource = "*"
       }
     ]
   })
