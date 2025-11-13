@@ -8,8 +8,6 @@
 *.tfplan
 *.tfstate.backup
 
-# Backend configuration (generated, contains account-specific info)
-backend.hcl
 
 # Crash log files
 crash.log
