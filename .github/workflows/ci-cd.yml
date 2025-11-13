@@ -64,10 +64,16 @@ jobs:
 
       - name: Terraform Plan
         working-directory: terraform/infra
+        env:
+          TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+          TF_VAR_mapbox_access_token: ${{ secrets.MAPBOX_ACCESS_TOKEN }}
         run: terraform plan -out=tfplan
 
       - name: Terraform Apply
         working-directory: terraform/infra
+        env:
+          TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+          TF_VAR_mapbox_access_token: ${{ secrets.MAPBOX_ACCESS_TOKEN }}
         run: terraform apply -auto-approve tfplan
 
       - name: Deploy Frontend
