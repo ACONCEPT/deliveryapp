@@ -263,39 +263,40 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Category header
-        Padding(
+        Container(
           padding: const EdgeInsets.symmetric(
-            vertical: DashboardConstants.cardPaddingSmall,
+            vertical: 12,
+            horizontal: 16,
           ),
-          child: Text(
-            category,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+          decoration: BoxDecoration(
+            color: Colors.orange.shade50,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.restaurant_menu,
+                size: 20,
+                color: Colors.orange.shade700,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                category,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.orange.shade900,
+                ),
+              ),
+            ],
           ),
         ),
-
-        // Items grid
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 0.95,
-            crossAxisSpacing: DashboardConstants.gridSpacing,
-            mainAxisSpacing: DashboardConstants.gridSpacing,
-          ),
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            return MenuItemCard(
-              menuItem: items[index],
-              onTap: () => _handleMenuItemTap(items[index]),
-            );
-          },
-        ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        ...items.map((item) => MenuItemCard(
+          menuItem: item,
+          onTap: () => _handleMenuItemTap(item),
+        )),
+        const SizedBox(height: 24),
       ],
     );
   }

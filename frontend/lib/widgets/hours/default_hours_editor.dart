@@ -63,8 +63,43 @@ class DefaultHoursEditor extends StatelessWidget {
               },
             ),
             const SizedBox(height: 16),
-            // Time inputs (only if not closed)
-            if (!defaultSchedule.closed) ...[
+            // Open all day toggle
+            CheckboxListTile(
+              title: const Text('Open 24 hours'),
+              subtitle: const Text(
+                'Restaurant is open all day (midnight to midnight)',
+                style: TextStyle(fontSize: 12),
+              ),
+              value: !defaultSchedule.closed &&
+                     defaultSchedule.open == '00:00' &&
+                     defaultSchedule.close == '23:59',
+              activeColor: Colors.green,
+              contentPadding: EdgeInsets.zero,
+              enabled: !defaultSchedule.closed,
+              onChanged: defaultSchedule.closed ? null : (value) {
+                if (value == true) {
+                  // Set to 24 hours
+                  onScheduleChanged(
+                    defaultSchedule.copyWith(
+                      open: '00:00',
+                      close: '23:59',
+                    ),
+                  );
+                } else {
+                  // Reset to default hours
+                  onScheduleChanged(
+                    defaultSchedule.copyWith(
+                      open: '09:00',
+                      close: '21:00',
+                    ),
+                  );
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+            // Time inputs (only if not closed and not open 24 hours)
+            if (!defaultSchedule.closed &&
+                !(defaultSchedule.open == '00:00' && defaultSchedule.close == '23:59')) ...[
               Row(
                 children: [
                   Expanded(

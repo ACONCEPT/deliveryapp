@@ -75,12 +75,20 @@ class _DayHoursEditorState extends State<DayHoursEditor> {
                               fontStyle: FontStyle.italic,
                             ),
                           )
-                        : Text(
-                            '${_formatTime(effectiveSchedule.open)} - ${_formatTime(effectiveSchedule.close)}',
-                            style: TextStyle(
-                              color: widget.useDefault ? Colors.grey[600] : Colors.black87,
-                            ),
-                          ),
+                        : (effectiveSchedule.open == '00:00' && effectiveSchedule.close == '23:59')
+                            ? Text(
+                                'Open 24h',
+                                style: TextStyle(
+                                  color: widget.useDefault ? Colors.green[600] : Colors.green[700],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              )
+                            : Text(
+                                '${_formatTime(effectiveSchedule.open)} - ${_formatTime(effectiveSchedule.close)}',
+                                style: TextStyle(
+                                  color: widget.useDefault ? Colors.grey[600] : Colors.black87,
+                                ),
+                              ),
                   ),
                   // Use default badge
                   if (widget.useDefault)
@@ -138,7 +146,9 @@ class _DayHoursEditorState extends State<DayHoursEditor> {
                     subtitle: Text(
                       widget.defaultSchedule.closed
                           ? 'Closed all day'
-                          : '${_formatTime(widget.defaultSchedule.open)} - ${_formatTime(widget.defaultSchedule.close)}',
+                          : (widget.defaultSchedule.open == '00:00' && widget.defaultSchedule.close == '23:59')
+                              ? 'Open 24h'
+                              : '${_formatTime(widget.defaultSchedule.open)} - ${_formatTime(widget.defaultSchedule.close)}',
                       style: const TextStyle(fontSize: 12),
                     ),
                     value: widget.useDefault,
@@ -168,8 +178,43 @@ class _DayHoursEditorState extends State<DayHoursEditor> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    // Time inputs (only if not closed)
-                    if (!widget.daySchedule.closed) ...[
+                    // Open 24 hours toggle
+                    CheckboxListTile(
+                      title: const Text('Open 24 hours'),
+                      subtitle: const Text(
+                        'Restaurant is open all day (midnight to midnight)',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      value: !widget.daySchedule.closed &&
+                             widget.daySchedule.open == '00:00' &&
+                             widget.daySchedule.close == '23:59',
+                      activeColor: Colors.green,
+                      contentPadding: EdgeInsets.zero,
+                      enabled: !widget.daySchedule.closed,
+                      onChanged: widget.daySchedule.closed ? null : (value) {
+                        if (value == true) {
+                          // Set to 24 hours
+                          widget.onScheduleChanged(
+                            widget.daySchedule.copyWith(
+                              open: '00:00',
+                              close: '23:59',
+                            ),
+                          );
+                        } else {
+                          // Reset to default hours
+                          widget.onScheduleChanged(
+                            widget.daySchedule.copyWith(
+                              open: '09:00',
+                              close: '21:00',
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    // Time inputs (only if not closed and not open 24 hours)
+                    if (!widget.daySchedule.closed &&
+                        !(widget.daySchedule.open == '00:00' && widget.daySchedule.close == '23:59')) ...[
                       Row(
                         children: [
                           Expanded(
